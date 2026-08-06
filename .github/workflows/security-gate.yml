@@ -49,16 +49,12 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
       - name: Terraform init + validate (all roots)
         run: |
-          # Only root modules. A child module has no required_providers of its
-          # own, so `init` there resolves an unconstrained provider version and
-          # validate fails on arguments that a newer major renamed, even though
-          # the root pins a version where the code is correct. Validating the
-          # root covers the whole module tree anyway.
+          # Every directory with .tf files is validated, including child
+          # modules, which each declare their own required_providers. Without
+          # that declaration a standalone init resolves an unconstrained
+          # provider version and validate fails on arguments a newer major
+          # renamed, while the root pins a version where the code is correct.
           for d in $(find . -name '*.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u); do
-            if ! grep -lq 'required_providers' "$d"/*.tf 2>/dev/null; then
-              echo "==> $d (child module, validated via its root)"
-              continue
-            fi
             echo "==> $d"
             terraform -chdir="$d" init -backend=false -input=false >/dev/null
             terraform -chdir="$d" validate -no-color
