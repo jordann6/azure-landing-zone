@@ -6,3 +6,7 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Child modules do not need their own lock file; only root configurations do.
+modules/**/.terraform.lock.hcl
+terraform/modules/**/.terraform.lock.hcl
