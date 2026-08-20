@@ -102,6 +102,69 @@ az network vnet peering list --resource-group rg-alz-hub --vnet-name vnet-alz-hu
   --query "[].{name:name, state:peeringState}" -o table
 ```
 
+## FortiGate-VM hub firewall (opt-in)
+
+Enterprises route spoke egress through a network virtual appliance in the hub.
+This layer deploys a **Fortinet FortiGate-VM** into dedicated NVA subnets and
+forces every spoke workload subnet's default route through its trust interface,
+so all north-south traffic passes one inspected chokepoint. It is gated on
+`enable_fortigate` (default `false`) so the landing zone still applies as a pure
+governance demo at near-zero cost.
+
+```
+                     Internet
+                        |
+             pip / port1 (untrust, 10.0.4.0/24)
+                        |
+                [ FortiGate-VM ]
+                        |
+             port2 (trust, 10.0.5.4)
+                        |
+        ┌───────────────┴───────────────┐
+   Platform spoke                   Sandbox spoke
+   snet-workloads                   snet-workloads
+   (0.0.0.0/0 → 10.0.5.4 via UDR)   (0.0.0.0/0 → 10.0.5.4 via UDR)
+```
+
+Placement note: a third-party NVA cannot live in `AzureFirewallSubnet`, which is
+reserved for the Azure Firewall managed service. The FortiGate gets its own
+`snet-fw-untrust` / `snet-fw-trust` subnets, the same reserved-subnet discipline
+applied to Bastion elsewhere in this portfolio.
+
+FortiGate-VM is a marketplace image, so accept its terms once per subscription,
+then apply with the firewall enabled:
+
+```bash
+az vm image terms accept --publisher fortinet \
+  --offer fortinet_fortigate-vm_v5 --plan fortinet_fg-vm
+
+cd terraform
+terraform apply \
+  -var enable_fortigate=true \
+  -var fortigate_admin_password='<StrongPassw0rd!>'
+# outputs: fortigate_untrust_ip, fortigate_console
+```
+
+Reach the console at `https://<fortigate_untrust_ip>` and confirm spoke egress
+now traverses the FortiGate. Cost: `Standard_F2s_v2` is roughly $0.085/hour plus
+PAYG licensing if you use a `*_payg_*` SKU instead of BYOL, so keep it to a short
+deploy-demo-destroy window. `terraform destroy` removes the firewall, its NICs,
+public IP, route tables, and the added subnets.
+
+### Validated live
+
+Deployed and verified on Azure (eastus): the FortiGate-VM booted on
+`Standard_F2s_v2` with untrust and trust interfaces, drew a public IP on untrust,
+and the `rt-alz-spoke-egress` route table confirmed `0.0.0.0/0 -> 10.0.5.4`
+(VirtualAppliance) on both spoke workload subnets, so all spoke egress is forced
+through the firewall. Torn down clean afterward.
+
+Note: a third-party NVA cannot share the regional-vCPU budget with a large NGFW
+on a capped subscription. If you also run the Palo Alto lab in
+[azure-vm-hardening](https://github.com/jordann6/azure-vm-hardening), watch your
+`Total Regional vCPUs` quota, since an 8-vCPU VM-Series plus this FortiGate can
+exceed a default 10-core cap.
+
 ## Teardown
 
 ```bash

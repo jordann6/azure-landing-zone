@@ -26,8 +26,18 @@ output "spoke_sandbox_vnet_id" {
 output "policy_assignment_ids" {
   description = "Policy assignment resource IDs"
   value = {
-    require_owner_tag  = azurerm_management_group_policy_assignment.require_owner_tag.id
-    deny_public_ip     = azurerm_management_group_policy_assignment.deny_public_ip.id
-    allowed_locations  = azurerm_management_group_policy_assignment.allowed_locations.id
+    require_owner_tag = azurerm_management_group_policy_assignment.require_owner_tag.id
+    deny_public_ip    = azurerm_management_group_policy_assignment.deny_public_ip.id
+    allowed_locations = azurerm_management_group_policy_assignment.allowed_locations.id
   }
+}
+
+output "fortigate_untrust_ip" {
+  description = "Public IP on the FortiGate untrust interface (null when disabled)."
+  value       = var.enable_fortigate ? azurerm_public_ip.fw_untrust[0].ip_address : null
+}
+
+output "fortigate_console" {
+  description = "How to reach the FortiGate management console after boot."
+  value       = var.enable_fortigate ? "https://${azurerm_public_ip.fw_untrust[0].ip_address} (admin / your fortigate_admin_password)" : "fortigate disabled"
 }

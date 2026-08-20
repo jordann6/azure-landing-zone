@@ -1,6 +1,7 @@
 from diagrams import Diagram, Cluster, Edge
-from diagrams.azure.network import VirtualNetworks, Subnets
+from diagrams.azure.network import VirtualNetworks, Subnets, Firewall, RouteTables
 from diagrams.azure.general import ManagementGroups, Subscriptions
+from diagrams.onprem.network import Internet
 from diagrams.onprem.iac import Terraform
 
 graph_attrs = {"fontsize": "13", "bgcolor": "white", "pad": "0.5", "splines": "ortho"}
@@ -37,6 +38,12 @@ with Diagram(
         s_bas = Subnets("AzureBastionSubnet\n/26  (reserved)")
         s_mgmt = Subnets("snet-management\n/24  + NSG")
 
+        with Cluster("FortiGate NVA (opt-in)"):
+            inet = Internet("Internet")
+            fgt = Firewall("FortiGate-VM\nuntrust / trust")
+            udr = RouteTables("UDR: 0.0.0.0/0\n-> trust 10.0.5.4")
+            inet >> Edge(label="untrust") >> fgt >> Edge(label="trust") >> udr
+
     with Cluster("Platform spoke  10.1.0.0/16"):
         spoke_plat = VirtualNetworks("vnet-alz-platform")
         s_plat = Subnets("snet-workloads /24")
@@ -50,3 +57,7 @@ with Diagram(
 
     hub >> Edge(label="peered") >> spoke_plat
     hub >> Edge(label="peered") >> spoke_sand
+
+    # Spoke workload subnets force default egress through the FortiGate trust IP.
+    udr >> Edge(label="inspected egress", style="dashed") >> s_plat
+    udr >> Edge(label="inspected egress", style="dashed") >> s_sand
