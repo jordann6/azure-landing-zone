@@ -1,0 +1,50 @@
+# CIS Microsoft Azure Foundations Benchmark: control mapping
+
+How this landing zone implements the CIS Azure Foundations Benchmark, control area
+by control area, with the exact Terraform that enforces each one. Rows are honest:
+where a control is scored by the built-in initiative but not additionally hardened
+in code, or is not applicable in a single-subscription demo, it says so.
+
+The built-in **CIS Microsoft Azure Foundations Benchmark** initiative is assigned
+at the root management group (`azurerm_management_group_policy_assignment.cis` in
+`terraform/policies.tf`), so every control it defines is scored across all tiers
+in Microsoft Defender for Cloud's Regulatory Compliance blade. The rows below
+call out where this repo adds a preventive (Deny) control on top of that scoring.
+
+| CIS area | Control (abbrev) | How it is implemented here | Resource |
+|---|---|---|---|
+| 1. Identity | Restrict privileged access, no standing prod write | Entra persona groups bound at MG scope; prod write is PIM-eligible only, not standing | `identity.tf` (`azuread_group.personas`, `azurerm_role_assignment.personas`, `azurerm_pim_eligible_role_assignment.prod_write`) |
+| 1. Identity | Custom roles / least privilege by scope | RBAC granted at the narrowest MG (junior at Dev, platform at Workloads, finops/security at root read-only) | `identity.tf` `local.role_bindings` |
+| 2. Defender | Enable Defender for Cloud + CIS assessment | Free foundational CSPM renders the CIS assessment; paid plans gated on | `monitoring.tf` (`azurerm_security_center_subscription_pricing`), initiative in `policies.tf` |
+| 3. Storage | Secure transfer, no public blob, private access | Deny public IP + private-endpoint pattern; blob privatelink DNS zone provisioned | `policies.tf` `deny_public_ip`, `private_endpoints.tf` |
+| 4. Database | Private data tier, no public path | Spokes carry default-deny NSGs; data tier segmentation is Phase 5 (Azure SQL failover) | `modules/landing-zone/main.tf` NSG; Phase 5 pending |
+| 5. Logging | Central log profile, retention, Key Vault logging | Central Log Analytics workspace; diagnostic settings on hub VNet and Key Vault (AuditEvent) | `monitoring.tf` |
+| 6. Networking | Restrict inbound, no open admin ports | Management NSG denies inbound Internet; Bastion is the only admin path; no public VM IPs | `network.tf` NSG, `bastion.tf` |
+| 6. Networking | Central egress inspection | Azure Firewall with a UDR forcing 0.0.0.0/0 through it from every spoke | `firewall_azure.tf` |
+| 7. Virtual machines | No public IP, disk encryption | No VMs in the base; the opt-in FortiGate is the only VM and is off by default | `firewall.tf` (gated) |
+| 8. Key Vault | Purge protection, soft delete, firewall, rotation | Key Vault with purge protection + soft delete + default-Deny network ACL + CMK rotation policy | `keyvault.tf` |
+| 9. App Service | N/A | The subscription has 0 App Service quota; App Service is intentionally not used | designed-only |
+| 10. Governance / tags | Enforce resource tags, allowed locations | Deny policies for owner/cost_center/environment/data_classification tags and allowed locations; Prod locked to a single region | `policies.tf` |
+| 10. Cost | Budgets and alerts | Monthly subscription budget with actual + forecast alerts | `budgets.tf` |
+
+## Preventive controls added on top of CIS scoring (Deny, not Audit)
+
+These are enforced by custom policy at the hierarchy, so a violating request is
+blocked at create time rather than only flagged after the fact:
+
+- Deny public IP creation (`deny_public_ip`)
+- Allowed locations, tighter at Prod (`allowed_locations`, `prod_single_region`)
+- Require `owner`, `cost_center`, `environment`, `data_classification` tags on resource groups (`require_owner_tag`, `require_tag`)
+
+## Honest gaps in this demo
+
+- **Data tier (CIS 4)**: private data subnets exist via the default-deny NSG, but
+  the managed database, immutable backup vault, and failover are Phase 5 work
+  (reusing `azure-secrets-lifecycle` / `azure-backup-system` / `azure-multi-region-failover`), not built here.
+- **HSM-backed keys (CIS 8)**: the CMK is software-protected; an HSM key needs a
+  Premium vault, out of the demo budget. Documented as the upgrade path.
+- **Defender paid plans**: off by default (they bill per resource). Free
+  foundational CSPM covers the CIS assessment; paid plans are one flag away
+  (`enable_defender_standard`).
+- **Single subscription**: the tiers are management groups + resource groups, not
+  a subscription per tier. See `access-model.md`.

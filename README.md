@@ -1,186 +1,185 @@
 # Azure Landing Zone
 
-An enterprise-grade Azure landing zone built with Terraform. Establishes the governance foundation that workload subscriptions inherit: a management group hierarchy, policy-as-code guardrails, and a hub-spoke network with a reusable spoke-vending module. Every spoke is provisioned by calling one module block.
+A standalone, best-practice Azure landing zone built with bespoke Terraform: a
+management-group hierarchy with preventive (Deny) policy guardrails and the
+built-in CIS initiative, a hub-and-spoke network with centralized Azure Firewall
+egress inspection and Bastion-only admin access, private endpoints, central
+logging with Defender for Cloud, a CMK-backed Key Vault, and least-privilege Entra
+identity with just-in-time elevation to Prod. It is one of three isolated landing
+zones (AWS, Azure, GCP) in this portfolio; the three do not communicate.
 
 ## Architecture
 
 ![Architecture](docs/architecture.png)
 
-| Layer | Component | Role |
-|---|---|---|
-| Governance | **Management group hierarchy** | Four-level tree (org root → Platform, Workloads, Sandbox) |
-| Policy | **Azure Policy (3 definitions)** | Require owner tag · deny public IPs · allowed locations |
-| Connectivity | **Hub VNet** (10.0.0.0/16) | Reserved subnets for Firewall, Gateway, Bastion; active management subnet + NSG |
-| Connectivity | **Spoke VNets** (10.1–2.0.0/16) | Platform and Sandbox spokes, each peered to hub in both directions |
-| IaC | **Terraform module** (`modules/landing-zone`) | Vends a new spoke (resource group + VNet + peering) with a single module call |
+## The problem it solves
 
-## Management group hierarchy
+A subscription with no landing zone lets anyone create anything, anywhere, with no
+tags, public IPs on demand, admin ports open to the internet, secrets in code, and
+no central log of what happened. This repo is the governed foundation a workload
+lands **into**: the guardrails are attached at the hierarchy so every current and
+future resource inherits them, the network forces all egress through one inspected
+chokepoint, the only admin path is Bastion, and the whole thing is scored against
+the CIS Azure Foundations Benchmark. It stands up, proves its guardrails deny, and
+tears down under a fixed budget.
 
-```
-Tenant Root Group
-└── jordann6  (mg-jordann6)
-    ├── Platform   (mg-jordann6-platform)
-    ├── Workloads  (mg-jordann6-workloads)  ← subscription lives here
-    └── Sandbox    (mg-jordann6-sandbox)
-```
+## How Azure differs from the AWS and GCP zones
 
-The subscription is moved into `mg-jordann6-workloads` so all three policy assignments apply automatically to every resource in this subscription.
+Same design contract, three different control planes:
 
-## Policy guardrails
+- **Hierarchy**: Azure uses **management groups** (+ resource groups in this
+  single-subscription demo) where AWS uses **Organizations OUs/accounts** and GCP
+  uses **folders/projects**. The intended subscription-per-tier split is documented
+  in [access-model.md](docs/access-model.md).
+- **Preventive guardrails**: **Azure Policy with Deny effects** and the built-in
+  **CIS initiative**, where AWS uses **SCPs** and GCP uses **org policies** applied
+  at the org root.
+- **Egress inspection**: **Azure Firewall + a UDR** forcing `0.0.0.0/0` through it,
+  where AWS uses a **Network Firewall in an inspection VPC off a Transit Gateway**
+  and GCP uses **Cloud NAT + hierarchical firewall policies**.
+- **Admin path**: **Azure Bastion** (no public VM IPs), where AWS uses **SSM
+  Session Manager** and GCP uses **IAP-only SSH**.
+- **Identity/JIT**: **Entra ID groups + PIM**, where AWS uses **IAM Identity Center
+  permission sets** and GCP uses **Cloud Identity + IAM Conditions**.
 
-Policies are defined as Custom definitions at the Workloads management group and assigned at that same scope.
+## What gets built, by tier and pillar
 
-| Policy | Effect | Condition |
-|---|---|---|
-| Require owner tag | Audit | Resource groups missing an `owner` tag |
-| Deny public IP creation | Audit | Any `Microsoft.Network/publicIPAddresses` resource |
-| Allowed locations | Audit | Resources not in `eastus` or `eastus2` |
+**Governance (free layer).**
+- Management-group tree: root → Platform, Workloads (Dev, Test, Prod), Sandbox
+  (`terraform/main.tf`). The subscription is associated to Workloads so policy
+  inherits down.
+- Preventive **Deny** policies at the hierarchy: deny public IP, allowed locations
+  (tighter at Prod), and required tags (`owner`, `cost_center`, `environment`,
+  `data_classification`) (`terraform/policies.tf`).
+- The built-in **CIS Microsoft Azure Foundations Benchmark** initiative assigned at
+  root, scored in Defender for Cloud. See [cis-mapping.md](docs/cis-mapping.md).
 
-Effects are set to `Audit` for demo deployment. In a production pipeline these would be `Deny`, applied in a separate governance stage before workload provisioning begins.
+**Identity.**
+- Seven least-privilege Entra persona groups bound at MG scope; **no standing write
+  to Prod** (platform engineers are PIM-eligible for Contributor, JIT only)
+  (`terraform/identity.tf`, [access-model.md](docs/access-model.md)).
 
-## Hub-spoke network
+**Networking (hourly, flag-gated).**
+- Hub VNet `10.0.0.0/16` with correctly named/sized reserved subnets.
+- **Azure Firewall** (Standard, threat-intel Deny) with a route table forcing every
+  spoke's `0.0.0.0/0` through it (`terraform/firewall_azure.tf`).
+- **Azure Bastion** as the only admin path (`terraform/bastion.tf`).
+- **Private endpoints + private DNS** for the Key Vault (`terraform/private_endpoints.tf`).
+- Four tier spokes (dev `10.1`, test `10.2`, prod `10.3`, sandbox `10.4`), each
+  peered to the hub with a **default-deny NSG** on its workload subnet
+  (`terraform/network.tf`, `terraform/modules/landing-zone`).
+- An **opt-in FortiGate NVA** is the alternative third-party egress path
+  (`terraform/firewall.tf`), mutually exclusive with Azure Firewall.
 
-```
-Hub VNet  10.0.0.0/16
-├── AzureFirewallSubnet    10.0.0.0/26   (reserved — /26 minimum for Azure Firewall)
-├── GatewaySubnet          10.0.1.0/27   (reserved — /27 minimum for VPN/ER Gateway)
-├── AzureBastionSubnet     10.0.2.0/26   (reserved — /26 minimum for Azure Bastion)
-└── snet-management        10.0.3.0/24   (active, NSG blocks inbound internet)
-
-Spoke: Platform   10.1.0.0/16  →  snet-workloads  10.1.0.0/24
-Spoke: Sandbox    10.2.0.0/16  →  snet-workloads  10.2.0.0/24
-```
-
-Reserved subnets carry the names Azure requires (`AzureFirewallSubnet`, `GatewaySubnet`, `AzureBastionSubnet`) and are sized to minimums, so the services can be activated later without re-addressing.
-
-## Landing-zone vending module
-
-Adding a new spoke takes one module call:
-
-```hcl
-module "spoke_dev" {
-  source = "./modules/landing-zone"
-
-  name                    = "dev"
-  project                 = var.project
-  location                = var.location
-  address_space           = ["10.3.0.0/16"]
-  workload_subnet_prefix  = "10.3.0.0/24"
-  hub_vnet_id             = azurerm_virtual_network.hub.id
-  hub_vnet_name           = azurerm_virtual_network.hub.name
-  hub_resource_group_name = azurerm_resource_group.hub.name
-  tags                    = local.tags
-}
-```
-
-The module creates the spoke resource group, spoke VNet, workload subnet, and both directions of the VNet peering so the hub and spoke can route to each other immediately.
+**Logging, encryption, cost.**
+- Central **Log Analytics** workspace with diagnostic settings on the hub VNet and
+  Key Vault; **Defender for Cloud** free CSPM renders the CIS assessment
+  (`terraform/monitoring.tf`).
+- **Key Vault** with purge protection + soft delete + default-Deny network ACL, and
+  a **CMK with a rotation policy** (`terraform/keyvault.tf`).
+- A monthly **budget** with actual + forecast alerts (`terraform/budgets.tf`).
 
 ## Deploy
 
-```bash
-cd terraform
-terraform init
-terraform apply
-```
-
-## Verify
+Credentialed applies run locally (`az login`), plan-before-apply. The deploy is two
+steps so the free layer stands up first and the hourly network layer is a separate,
+explicit confirmation.
 
 ```bash
-# Confirm management group hierarchy
-az account management-group list --query "[].{name:name, displayName:displayName}" -o table
+az login && az account set --subscription <id>
 
-# Confirm subscription is under Workloads MG
-az account management-group show --name mg-jordann6-workloads --expand --recurse \
-  --query "children[].{type:type, name:name}" -o table
+# Copy the example, set deployer_ip_cidrs to your workstation IP so the CMK can be
+# created (curl -s https://ifconfig.me), then:
+cp terraform/example.tfvars terraform/terraform.tfvars   # gitignored
 
-# Confirm policy assignments
-az policy assignment list --scope /providers/Microsoft.Management/managementGroups/mg-jordann6-workloads \
-  --query "[].{name:name, displayName:displayName}" -o table
+# 1) Free layer: MGs, Deny policies, CIS, identity, logging, Key Vault CMK
+make deploy            # apply with enable_firewall/bastion/private_endpoints = false
 
-# Confirm hub-spoke peering is Connected
-az network vnet peering list --resource-group rg-alz-hub --vnet-name vnet-alz-hub \
-  --query "[].{name:name, state:peeringState}" -o table
+# 2) Hourly layer, after reviewing the plan and cost:
+make deploy-network    # Azure Firewall + Bastion + UDR + private endpoints
 ```
 
-## FortiGate-VM hub firewall (opt-in)
+Through the `!` bash line (no interactive prompts) use the same commands with
+`-auto-approve` and ABSOLUTE `-chdir` paths, e.g.
+`terraform -chdir=/Users/jordannelson/azure-landing-zone/terraform apply -auto-approve -var enable_firewall=false ...`.
 
-Enterprises route spoke egress through a network virtual appliance in the hub.
-This layer deploys a **Fortinet FortiGate-VM** into dedicated NVA subnets and
-forces every spoke workload subnet's default route through its trust interface,
-so all north-south traffic passes one inspected chokepoint. It is gated on
-`enable_fortigate` (default `false`) so the landing zone still applies as a pure
-governance demo at near-zero cost.
-
-```
-                     Internet
-                        |
-             pip / port1 (untrust, 10.0.4.0/24)
-                        |
-                [ FortiGate-VM ]
-                        |
-             port2 (trust, 10.0.5.4)
-                        |
-        ┌───────────────┴───────────────┐
-   Platform spoke                   Sandbox spoke
-   snet-workloads                   snet-workloads
-   (0.0.0.0/0 → 10.0.5.4 via UDR)   (0.0.0.0/0 → 10.0.5.4 via UDR)
-```
-
-Placement note: a third-party NVA cannot live in `AzureFirewallSubnet`, which is
-reserved for the Azure Firewall managed service. The FortiGate gets its own
-`snet-fw-untrust` / `snet-fw-trust` subnets, the same reserved-subnet discipline
-applied to Bastion elsewhere in this portfolio.
-
-FortiGate-VM is a marketplace image, so accept its terms once per subscription,
-then apply with the firewall enabled:
+## Test (prove the guardrails deny)
 
 ```bash
-az vm image terms accept --publisher fortinet \
-  --offer fortinet_fortigate-vm_v5 --plan fortinet_fg-vm
+make test    # scripts/test-guardrails.sh
+```
 
-cd terraform
-terraform apply \
-  -var enable_fortigate=true \
+It does not just check that apply succeeded. It asserts that Azure **refuses**: a
+public IP (deny_public_ip), a resource group in a disallowed location
+(allowed_locations), and an untagged resource group (require-tag), each returning
+`RequestDisallowedByPolicy`; that the CIS initiative is assigned; and that Bastion
+is the admin path. It prints pass/fail per check and cleans up anything it created.
+
+## Destroy
+
+```bash
+make destroy    # terraform destroy, then scripts/verify-teardown.sh
+```
+
+`verify-teardown.sh` fails if any hourly-billed resource (Firewall, Bastion,
+Standard public IPs, VMs, private endpoints) is still alive.
+
+## Cost and teardown traps
+
+- **Standing after destroy**: ~$1/mo. The Key Vault CMK survives in a soft-deleted
+  state (purge protection holds it for the soft-delete window) by design;
+  everything else is torn down.
+- **Demo window** (flags on, ~2 hours): Azure Firewall Standard ~$1.25/hr, Bastion
+  Basic ~$0.19/hr, private endpoints ~$0.01/hr each, Log Analytics ~free at demo
+  volume. Roughly $3, under the portfolio's ~$7 ceiling.
+- **Traps**: Azure Firewall and any Gateway take **10-30 min** to delete; the
+  resource group goes last. `enable_firewall` and `enable_fortigate` are mutually
+  exclusive (both force `0.0.0.0/0` through a different next hop). Azure DDoS
+  Network Protection and paid Defender plans are designed-for but off (cost).
+
+## FortiGate-VM egress (opt-in alternative)
+
+Instead of Azure Firewall, the hub can route spoke egress through a **Fortinet
+FortiGate-VM** NVA (`enable_fortigate=true`, and set `enable_firewall=false`). It
+lives in dedicated `snet-fw-untrust` / `snet-fw-trust` subnets (a third-party NVA
+cannot share `AzureFirewallSubnet`) and forces every spoke's default route through
+its trust interface. Accept the marketplace terms once, then apply:
+
+```bash
+az vm image terms accept --publisher fortinet --offer fortinet_fortigate-vm_v5 --plan fortinet_fg-vm
+terraform -chdir=terraform apply \
+  -var enable_firewall=false -var enable_fortigate=true \
   -var fortigate_admin_password='<StrongPassw0rd!>'
-# outputs: fortigate_untrust_ip, fortigate_console
 ```
 
-Reach the console at `https://<fortigate_untrust_ip>` and confirm spoke egress
-now traverses the FortiGate. Cost: `Standard_F2s_v2` is roughly $0.085/hour plus
-PAYG licensing if you use a `*_payg_*` SKU instead of BYOL, so keep it to a short
-deploy-demo-destroy window. `terraform destroy` removes the firewall, its NICs,
-public IP, route tables, and the added subnets.
+This path was previously validated live on Azure (eastus): the FortiGate booted on
+`Standard_F2s_v2`, drew a public IP on untrust, and the spoke route tables confirmed
+`0.0.0.0/0 -> 10.0.5.4` (VirtualAppliance) on the workload subnets, then torn down
+clean. Watch the `Total Regional vCPUs` quota if you also run the VM-Series lab in
+[azure-vm-hardening](https://github.com/jordann6/azure-vm-hardening).
 
-### Validated live
+## CI
 
-Deployed and verified on Azure (eastus): the FortiGate-VM booted on
-`Standard_F2s_v2` with untrust and trust interfaces, drew a public IP on untrust,
-and the `rt-alz-spoke-egress` route table confirmed `0.0.0.0/0 -> 10.0.5.4`
-(VirtualAppliance) on both spoke workload subnets, so all spoke egress is forced
-through the firewall. Torn down clean afterward.
+Static gates run through the shared [platform-guardrails](https://github.com/jordann6/platform-guardrails)
+toolkit (`.github/workflows/guardrails.yml` → `tf-ci.yml@v1.3.0`): full-history
+gitleaks, `fmt` + `validate`, lockfile-committed assertion, tflint, Checkov, and
+Trivy config. The credentialed `apply` / `destroy` / `ttl-guard` workflows are
+wired but **inactive**: the shared reusable workflows authenticate to AWS only, so
+until they gain an `azure/login` OIDC path, Azure applies run locally. Deliberate
+Checkov/Trivy trade-offs (public Key Vault for CMK creation, Standard-tier firewall
+without IDPS, software-protected key) are inline-skipped with reasons in the code.
 
-Note: a third-party NVA cannot share the regional-vCPU budget with a large NGFW
-on a capped subscription. If you also run the Palo Alto lab in
-[azure-vm-hardening](https://github.com/jordann6/azure-vm-hardening), watch your
-`Total Regional vCPUs` quota, since an 8-vCPU VM-Series plus this FortiGate can
-exceed a default 10-core cap.
+## Docs
 
-## Teardown
+- [docs/cis-mapping.md](docs/cis-mapping.md): CIS control → Terraform resource, with honest gaps.
+- [docs/access-model.md](docs/access-model.md): persona-by-scope matrix, PIM/JIT, single-sub design.
+- [docs/accelerator-vs-bespoke.md](docs/accelerator-vs-bespoke.md): why bespoke modules over the ALZ accelerator.
 
-```bash
-cd terraform && terraform destroy
-```
+## Tech stack
 
-After destroy, Azure automatically re-associates the subscription with the tenant root group.
-
-## Cost
-
-VNets, subnets, NSGs, management groups, and policy assignments are free or near-zero. No VMs, no Azure Firewall, no Bastion, no Gateway. This is a provision, demo, destroy environment with negligible cost.
-
-## Tech Stack
-
-- **Terraform** `>= 1.6` with `azurerm ~> 3.100`, Azure Storage state backend
-- **Azure Management Groups** four-level governance hierarchy
-- **Azure Policy** three custom policy definitions assigned at MG scope
-- **Azure Virtual Networks** hub-spoke topology with bidirectional peering
-- **Terraform module** reusable `landing-zone` module for spoke vending
+- **Terraform** `>= 1.6`, `azurerm ~> 3.100`, `azuread ~> 2.50`, Azure Storage state backend
+- **Azure Management Groups + Azure Policy** (Deny) + built-in CIS initiative
+- **Azure Firewall + Bastion + UDR + Private Endpoints/DNS** hub-spoke inspection
+- **Log Analytics + Defender for Cloud**, **Key Vault + CMK rotation**
+- **Entra ID** persona groups + MG-scope RBAC + PIM
+- Reusable `landing-zone` spoke-vending module

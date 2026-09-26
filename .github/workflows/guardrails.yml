@@ -1,0 +1,33 @@
+name: Guardrails
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The static half is credential-free by design. Everything in the `static` job
+# runs analysis over Terraform that, on a pull_request event, was authored by
+# whoever opened the PR, so nothing here holds a permission that can mint a
+# cloud token. This repo replaces the old report-only security-gate.yml with the
+# shared toolkit so Azure and AWS run the identical static gates.
+#
+# Version pins: the reusable-workflow pin here (tf-ci) references v1.3.0, the
+# same tag the AWS repo pins. The credentialed apply/destroy/ttl-guard live in
+# their own files and stay inactive until platform-guardrails grows an
+# azure/login OIDC path (its tf-plan/apply/destroy configure AWS creds only).
+permissions:
+  contents: read
+
+jobs:
+  static:
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    with:
+      terraform_dir: terraform
+      # Single Terraform root in this repo, so one static job (the AWS repo has
+      # three roots: governance, network, workload).
+      #
+      # skip_policy: this repo carries no Rego yet. The shared conftest gate runs
+      # the AWS-shaped policy/ set, which has no google_/azurerm_ rules. Azure OPA
+      # rules are a tracked follow-up; until they exist the conftest job is
+      # skipped rather than run against rules that do not apply here.
+      skip_policy: true

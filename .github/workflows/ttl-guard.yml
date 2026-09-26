@@ -1,0 +1,37 @@
+name: TTL guard
+
+# Scheduled watch for a forgotten teardown. In check_only mode it reads live
+# state and fails if any hourly-billed resource is still standing; the red
+# scheduled run and its notification are the alarm. It changes nothing.
+#
+# The hourly resources that matter here are Azure Firewall (~$1.25/hr) and
+# Bastion (~$0.19/hr), both gated behind enable_firewall / enable_bastion.
+#
+# INACTIVE for Azure, same reason as apply.yml / destroy.yml: the shared
+# tf-destroy.yml configures AWS credentials only. Until an azure/login path
+# exists, the local scripts/verify-teardown.sh is the standing-resource alarm.
+#
+# ACTIVATE once platform-guardrails gains an azure/login OIDC path:
+#   1. add the azure/login step + inputs to tf-destroy.yml, cut a new tag
+#   2. bump the pin below, pass the Azure inputs
+#   3. uncomment the schedule trigger
+on:
+  workflow_dispatch:
+  # ACTIVATE: hourly check for standing billable resources.
+  # schedule:
+  #   - cron: "0 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  ttl:
+    permissions:
+      contents: read
+      id-token: write
+    uses: jordann6/platform-guardrails/.github/workflows/tf-destroy.yml@v1.3.0
+    with:
+      terraform_dir: terraform
+      aws_role_arn: ""
+      aws_region: ""
+      check_only: true

@@ -8,11 +8,81 @@ variable "project" {
   default = "alz"
 }
 
-# --- FortiGate-VM hub firewall (opt-in) ---
+variable "allowed_locations" {
+  type        = list(string)
+  default     = ["eastus", "eastus2", "global"]
+  description = "Regions the allowed-locations Deny policy permits."
+}
+
+# --- Governance / cost ---
+variable "budget_amount" {
+  type        = number
+  default     = 20
+  description = "Monthly subscription budget in USD."
+}
+
+variable "alert_email" {
+  type        = string
+  default     = "you@example.com"
+  description = "Budget-alert recipient."
+}
+
+# --- Feature flags (default true in code; a gitignored terraform.tfvars turns
+# the hourly-billed ones off for a cheap governance-only apply, mirroring the
+# AWS reduced-footprint pattern). ---
+variable "enable_firewall" {
+  type        = bool
+  default     = true
+  description = "Deploy Azure Firewall in the hub and force spoke egress through it. Hourly cost (~$1.25/hr). Mutually exclusive with enable_fortigate."
+}
+
+variable "enable_bastion" {
+  type        = bool
+  default     = true
+  description = "Deploy Azure Bastion for the only admin path (no public SSH/RDP). Hourly cost (~$0.19/hr)."
+}
+
+variable "enable_private_endpoints" {
+  type        = bool
+  default     = true
+  description = "Deploy Private DNS zones and a private endpoint for the Key Vault. Small hourly cost per endpoint."
+}
+
+variable "enable_defender_standard" {
+  type        = bool
+  default     = false
+  description = "Turn on paid Microsoft Defender for Cloud plans. Off by default: the free foundational CSPM already renders the CIS assessment. Paid plans bill per resource."
+}
+
+variable "create_entra_identity" {
+  type        = bool
+  default     = true
+  description = "Create Entra ID persona groups, MG-scope RBAC, and PIM eligibility. Needs tenant Graph permissions (and P2 for PIM). Set false where the demo tenant lacks them."
+}
+
+variable "enable_pim" {
+  type        = bool
+  default     = true
+  description = "Create PIM eligible (JIT) role assignments for the prod-write persona. Requires Entra ID P2. Only takes effect when create_entra_identity is true."
+}
+
+variable "kv_admin_object_id" {
+  type        = string
+  default     = ""
+  description = "Object ID granted Key Vault Crypto Officer so the CMK can be created. Empty falls back to the deploying principal."
+}
+
+variable "deployer_ip_cidrs" {
+  type        = list(string)
+  default     = []
+  description = "Public IP CIDRs allowed through the Key Vault firewall so the deploying workstation can create the CMK on first apply. Set this to your own IP (e.g. [\"203.0.113.4/32\"]) before applying; the vault default action is Deny."
+}
+
+# --- FortiGate-VM hub firewall (opt-in alternative to Azure Firewall) ---
 variable "enable_fortigate" {
   type        = bool
   default     = false
-  description = "Deploy a FortiGate-VM in the hub and route spoke egress through it. Adds real cost, so it is off by default."
+  description = "Deploy a FortiGate-VM NVA instead of Azure Firewall. Mutually exclusive with enable_firewall. Off by default."
 }
 
 variable "fortigate_vm_size" {
