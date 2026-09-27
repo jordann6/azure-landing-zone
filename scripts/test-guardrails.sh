@@ -11,6 +11,9 @@ PROJECT="${PROJECT:-alz}"
 LOCATION="${LOCATION:-eastus}"
 BAD_LOCATION="${BAD_LOCATION:-westus2}"
 RG_TEST="rg-${PROJECT}-guardrail-test"
+# The CIS initiative is assigned at the root management group; a subscription-scope
+# policy-assignment list does not surface MG-scoped assignments, so query the MG.
+ROOT_MG="${ROOT_MG:-mg-jordann6}"
 pass=0
 fail=0
 
@@ -50,7 +53,8 @@ if denied "$out"; then ok "untagged RG blocked by require-tag policies"; else
 fi
 
 echo "-- CIS initiative assigned --"
-if az policy assignment list --disable-scope-strict-match \
+if az policy assignment list \
+     --scope "/providers/Microsoft.Management/managementGroups/${ROOT_MG}" \
      --query "[?name=='cis-azure-foundations'] | length(@)" -o tsv 2>/dev/null | grep -q '^[1-9]'; then
   ok "CIS Microsoft Azure Foundations initiative is assigned"
 else

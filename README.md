@@ -50,14 +50,22 @@ Same design contract, three different control planes:
   inherits down.
 - Preventive **Deny** policies at the hierarchy: deny public IP, allowed locations
   (tighter at Prod), and required tags (`owner`, `cost_center`, `environment`,
-  `data_classification`) (`terraform/policies.tf`).
+  `data_classification`) (`terraform/policies.tf`). The deny-public-IP assignment
+  excludes the hub resource group (`not_scopes`), where the firewall and bastion
+  legitimately hold public IPs: in the intended multi-subscription design the hub
+  sits under Platform and is out of scope, but this single-subscription demo
+  associates the whole subscription to Workloads, so the hub needs an explicit
+  carve-out while every workload spoke stays denied.
 - The built-in **CIS Microsoft Azure Foundations Benchmark** initiative assigned at
   root, scored in Defender for Cloud. See [cis-mapping.md](docs/cis-mapping.md).
 
 **Identity.**
 - Seven least-privilege Entra persona groups bound at MG scope; **no standing write
   to Prod** (platform engineers are PIM-eligible for Contributor, JIT only)
-  (`terraform/identity.tf`, [access-model.md](docs/access-model.md)).
+  (`terraform/identity.tf`, [access-model.md](docs/access-model.md)). PIM eligibility
+  needs an Entra ID P2 license, so a tenant without P2 deploys with `enable_pim =
+  false`: the persona groups and MG-scoped RBAC still apply, and the JIT-to-Prod
+  wiring stays in `identity.tf` behind the flag for a P2 tenant.
 
 **Networking (hourly, flag-gated).**
 - Hub VNet `10.0.0.0/16` with correctly named/sized reserved subnets.
@@ -65,9 +73,11 @@ Same design contract, three different control planes:
   spoke's `0.0.0.0/0` through it (`terraform/firewall_azure.tf`).
 - **Azure Bastion** as the only admin path (`terraform/bastion.tf`).
 - **Private endpoints + private DNS** for the Key Vault (`terraform/private_endpoints.tf`).
-- Four tier spokes (dev `10.1`, test `10.2`, prod `10.3`, sandbox `10.4`), each
-  peered to the hub with a **default-deny NSG** on its workload subnet
-  (`terraform/network.tf`, `terraform/modules/landing-zone`).
+- Three tier spokes (dev `10.1`, test `10.2`, sandbox `10.4`), each peered to the
+  hub with a **default-deny NSG** on its workload subnet (`terraform/network.tf`,
+  `terraform/modules/landing-zone`). The prod tier (`10.3`) is owned by the separate
+  workload root (see below), which stands up the prod VNet and peers it to this hub,
+  so the base does not vend a prod spoke.
 - An **opt-in FortiGate NVA** is the alternative third-party egress path
   (`terraform/firewall.tf`), mutually exclusive with Azure Firewall.
 
@@ -78,6 +88,33 @@ Same design contract, three different control planes:
 - **Key Vault** with purge protection + soft delete + default-Deny network ACL, and
   a **CMK with a rotation policy** (`terraform/keyvault.tf`).
 - A monthly **budget** with actual + forecast alerts (`terraform/budgets.tf`).
+
+## Workload paved road (prod tier, `workload/`)
+
+A separate Terraform root (`workload/`, its own state) is the prod paved road, the
+hourly-billed layer that lands in the prod tier (`10.3`) and is deployed for a demo
+then destroyed on its own. It mirrors `aws-scp-governance/workload` (EKS to AKS),
+reading the base landing zone over remote state (the hub VNet, the firewall private
+IP, the Log Analytics workspace) and peering the prod VNet to the hub.
+
+| Control | What it is |
+|---|---|
+| Cluster | **Private AKS**: no public control plane, egress only through the hub firewall (`outbound_type=userDefinedRouting`), CMK envelope encryption of etcd secrets (Key Vault KMS), CMK node disks (disk encryption set), Entra RBAC with local accounts disabled, control-plane audit logs to Log Analytics (`workload/aks.tf`). |
+| Pod identity | **Workload identity** (OIDC), the IRSA analog: the External Secrets Operator service account federates to an Entra identity scoped to read only the DB secret (`workload/workload-identity.tf`). |
+| Data | **PostgreSQL Flexible**, zone-redundant HA, VNet-injected (private), CMK storage, Entra auth, credential in Key Vault (`workload/postgres.tf`). |
+| Registry | **ACR Premium**: no public access, CMK, private endpoint, MCR pull-through cache, the only sanctioned image source (`workload/acr.tf`). |
+| Private access | Private endpoints + private DNS for ACR and Key Vault, so the private cluster pulls images and reads secrets with no internet path (`workload/private-endpoints.tf`). |
+| Backup | Geo-redundant Backup vault with soft delete, protecting the database (`workload/backup.tf`). |
+| Network | Prod VNet `10.3`, no public IP/NAT, egress `0.0.0.0/0` to the hub firewall, app/data NSGs, NSG flow logs (`workload/network.tf`, `workload/flow-logs.tf`). |
+
+Because a private AKS cluster with UDR egress cannot provision unless the firewall
+permits AKS's required destinations, `workload/aks-egress-firewall.tf` attaches an
+`AzureKubernetesService` FQDN-tag rule collection to the base firewall policy. This
+is the Azure analog of the hub firewall's domain allowlist that fronts the private
+EKS cluster on the AWS side.
+
+Deploy it after the base (with the hourly firewall up): `make deploy-workload`, tear
+it down first with `make destroy-workload`.
 
 ## Deploy
 

@@ -50,3 +50,9 @@ Creating Entra groups needs tenant Graph permissions, and PIM needs an Entra ID
 P2 license. Where the demo tenant lacks either, set `create_entra_identity = false`
 (and `enable_pim = false`); the persona-by-scope design above still stands as the
 documented target, and the rest of the landing zone deploys unchanged.
+
+This deployment ran on a tenant with **no Entra ID P2**, so it was applied with
+`enable_pim = false`: the seven persona groups and their MG-scoped RBAC are live,
+but the JIT-to-Prod eligible assignment (`azurerm_pim_eligible_role_assignment.prod_write`)
+was not created. The Prod row above therefore describes the target model, not a
+standing assignment in this run.

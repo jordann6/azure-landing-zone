@@ -7,13 +7,17 @@ from diagrams.azure.network import (
     RouteTables,
     PrivateEndpoint,
     DNSPrivateZones,
-    LoadBalancers,
 )
 from diagrams.azure.security import KeyVaults, SecurityCenter
 from diagrams.azure.analytics import LogAnalyticsWorkspaces
 from diagrams.azure.identity import ActiveDirectory
 from diagrams.onprem.network import Internet
 from diagrams.onprem.iac import Terraform
+from diagrams.custom import Custom
+
+# The mingrammer library has no Azure Bastion node, so use the official Azure
+# Bastion service icon (docs/icons/azure-bastion.png) as a custom node.
+BASTION_ICON = "docs/icons/azure-bastion.png"
 
 graph_attrs = {"fontsize": "13", "bgcolor": "white", "pad": "0.5", "splines": "ortho"}
 node_attrs = {"fontsize": "11"}
@@ -28,6 +32,7 @@ with Diagram(
     node_attr=node_attrs,
 ):
     tf = Terraform("Terraform\n(IaC)")
+    inet = Internet("Internet")
 
     with Cluster("Management Group Hierarchy  ·  CIS initiative + Deny policies (inherited)"):
         mg_root = Managementgroups("jordann6\n(root)")
@@ -46,11 +51,11 @@ with Diagram(
     with Cluster("Identity (Entra ID)"):
         aad = ActiveDirectory("7 persona groups\nRBAC @ MG scope + PIM JIT")
 
-    with Cluster("Hub VNet  10.0.0.0/16  ·  eastus"):
+    with Cluster("Hub VNet  10.0.0.0/16  ·  centralus"):
         hub = VirtualNetworks("vnet-alz-hub")
         fw = Firewall("Azure Firewall\n(Standard, threat-intel Deny)")
         udr = RouteTables("UDR 0.0.0.0/0\n-> firewall")
-        bastion = LoadBalancers("Bastion\n(only admin path)")
+        bastion = Custom("Bastion\n(only admin path)", BASTION_ICON)
         s_pl = Subnets("snet-privatelink")
 
         with Cluster("Private access"):
@@ -71,11 +76,15 @@ with Diagram(
     tf >> mg_root
     tf >> hub
 
-    # Egress inspection: every spoke's default route goes through the firewall.
+    # Egress inspection: every spoke's default route goes through the firewall,
+    # which SNATs outbound to the internet. The firewall public IP is the only
+    # egress point; the bastion public IP is the only inbound admin path.
     fw >> udr
     for sp in [sp_dev, sp_test, sp_prod, sp_sand]:
         hub >> Edge(label="peered") >> sp
         udr >> Edge(label="inspected egress", style="dashed") >> sp
+    fw >> Edge(label="egress (SNAT)") >> inet
+    inet >> Edge(label="admin (HTTPS portal)", style="dashed") >> bastion
 
     # Private path to the Key Vault.
     s_pl >> pe >> Edge(style="dashed") >> kv

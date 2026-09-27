@@ -120,19 +120,11 @@ module "spoke_test" {
   tags                    = merge(local.tags, { environment = "test" })
 }
 
-module "spoke_prod" {
-  source = "./modules/landing-zone"
-
-  name                    = "prod"
-  project                 = var.project
-  location                = var.location
-  address_space           = ["10.3.0.0/16"]
-  workload_subnet_prefix  = "10.3.0.0/24"
-  hub_vnet_id             = azurerm_virtual_network.hub.id
-  hub_vnet_name           = azurerm_virtual_network.hub.name
-  hub_resource_group_name = azurerm_resource_group.hub.name
-  tags                    = merge(local.tags, { environment = "prod" })
-}
+# The prod tier (10.3.0.0/16) is owned by the separate workload root
+# (../workload), which stands up the prod VNet, private AKS, and data tier as the
+# hourly paved road and peers it to this hub, mirroring aws-scp-governance/workload.
+# The hub cannot peer to two overlapping 10.3 VNets, so the base does not vend a
+# prod spoke; the prod MG and its single-region policy still live here (governance).
 
 module "spoke_sandbox" {
   source = "./modules/landing-zone"
@@ -153,7 +145,6 @@ locals {
   spoke_workload_subnet_ids = {
     dev     = module.spoke_dev.workload_subnet_id
     test    = module.spoke_test.workload_subnet_id
-    prod    = module.spoke_prod.workload_subnet_id
     sandbox = module.spoke_sandbox.workload_subnet_id
   }
 }

@@ -3,9 +3,11 @@
 # matching the AWS SCP posture on the other side of the portfolio.
 
 resource "azurerm_policy_definition" "require_owner_tag" {
-  name                = "require-owner-tag"
-  policy_type         = "Custom"
-  mode                = "Indexed"
+  name        = "require-owner-tag"
+  policy_type = "Custom"
+  # mode All (not Indexed) so the policy evaluates resource groups; Indexed mode
+  # only evaluates indexed resources and silently skips RGs and subscriptions.
+  mode                = "All"
   display_name        = "Require owner tag on resource groups"
   management_group_id = azurerm_management_group.root.id
 
@@ -47,9 +49,11 @@ resource "azurerm_policy_definition" "deny_public_ip" {
 }
 
 resource "azurerm_policy_definition" "allowed_locations" {
-  name                = "allowed-locations"
-  policy_type         = "Custom"
-  mode                = "Indexed"
+  name        = "allowed-locations"
+  policy_type = "Custom"
+  # mode All so resource-group locations are evaluated too, not just indexed
+  # resources (Indexed mode skips RGs and subscriptions).
+  mode                = "All"
   display_name        = "Allowed resource locations"
   management_group_id = azurerm_management_group.root.id
 
@@ -86,9 +90,10 @@ resource "azurerm_policy_definition" "allowed_locations" {
 
 # Parameterized tag-enforcement policy, assigned once per required tag below.
 resource "azurerm_policy_definition" "require_tag" {
-  name                = "require-tag-on-rg"
-  policy_type         = "Custom"
-  mode                = "Indexed"
+  name        = "require-tag-on-rg"
+  policy_type = "Custom"
+  # mode All so the tag is enforced on resource groups; Indexed mode skips them.
+  mode                = "All"
   display_name        = "Require a named tag on resource groups"
   management_group_id = azurerm_management_group.root.id
 
@@ -139,7 +144,13 @@ resource "azurerm_management_group_policy_assignment" "deny_public_ip" {
   management_group_id  = azurerm_management_group.workloads.id
 
   # Azure Firewall and Bastion legitimately need public IPs and live in the hub
-  # RGs, which sit under Platform, not Workloads, so no exclusion is needed here.
+  # RG. In the intended multi-subscription design the hub sits under Platform and
+  # is out of this assignment's scope. This single-subscription demo associates
+  # the whole subscription with Workloads, so the hub RG inherits the deny too;
+  # exclude just the hub ingress/egress tier while every workload spoke stays
+  # denied (the guardrail test still proves the deny on a spoke public IP).
+  not_scopes = [azurerm_resource_group.hub.id]
+
   depends_on = [azurerm_management_group_subscription_association.workloads]
 }
 
@@ -156,15 +167,22 @@ resource "azurerm_management_group_policy_assignment" "allowed_locations" {
   depends_on = [azurerm_management_group_subscription_association.workloads]
 }
 
-# One assignment per required cost/governance tag.
+# One assignment per required cost/governance tag. Azure caps a management-group
+# scoped policy assignment name at 24 characters, so the assignment name uses a
+# short code per tag while the display name stays descriptive.
 locals {
   required_tags = ["cost_center", "environment", "data_classification"]
+  require_tag_assignment_name = {
+    cost_center         = "require-tag-cc"
+    environment         = "require-tag-env"
+    data_classification = "require-tag-dc"
+  }
 }
 
 resource "azurerm_management_group_policy_assignment" "require_tag" {
   for_each = toset(local.required_tags)
 
-  name                 = "require-tag-${each.key}"
+  name                 = local.require_tag_assignment_name[each.key]
   display_name         = "Require ${each.key} tag on resource groups"
   policy_definition_id = azurerm_policy_definition.require_tag.id
   management_group_id  = azurerm_management_group.workloads.id

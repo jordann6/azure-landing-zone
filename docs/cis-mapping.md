@@ -32,7 +32,8 @@ call out where this repo adds a preventive (Deny) control on top of that scoring
 These are enforced by custom policy at the hierarchy, so a violating request is
 blocked at create time rather than only flagged after the fact:
 
-- Deny public IP creation (`deny_public_ip`)
+- Deny public IP creation (`deny_public_ip`), excluding the hub resource group where
+  the firewall and bastion legitimately hold public IPs (workload spokes stay denied)
 - Allowed locations, tighter at Prod (`allowed_locations`, `prod_single_region`)
 - Require `owner`, `cost_center`, `environment`, `data_classification` tags on resource groups (`require_owner_tag`, `require_tag`)
 

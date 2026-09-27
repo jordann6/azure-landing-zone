@@ -21,7 +21,6 @@ output "spoke_vnet_ids" {
   value = {
     dev     = module.spoke_dev.vnet_id
     test    = module.spoke_test.vnet_id
-    prod    = module.spoke_prod.vnet_id
     sandbox = module.spoke_sandbox.vnet_id
   }
 }
@@ -55,6 +54,11 @@ output "firewall_private_ip" {
 output "firewall_public_ip" {
   description = "Azure Firewall public egress IP; null when disabled."
   value       = var.enable_firewall ? azurerm_public_ip.firewall[0].ip_address : null
+}
+
+output "firewall_policy_id" {
+  description = "Hub firewall policy ID, so a workload root can attach its own egress rule collection (e.g. AKS required FQDNs); null when disabled."
+  value       = var.enable_firewall ? azurerm_firewall_policy.hub[0].id : null
 }
 
 output "bastion_dns_name" {
