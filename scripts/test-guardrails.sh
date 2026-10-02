@@ -8,7 +8,7 @@
 set -uo pipefail
 
 PROJECT="${PROJECT:-alz}"
-LOCATION="${LOCATION:-eastus}"
+LOCATION="${LOCATION:-centralus}"
 BAD_LOCATION="${BAD_LOCATION:-westus2}"
 RG_TEST="rg-${PROJECT}-guardrail-test"
 # The CIS initiative is assigned at the root management group; a subscription-scope

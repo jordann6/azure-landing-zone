@@ -105,7 +105,7 @@ IP, the Log Analytics workspace) and peering the prod VNet to the hub.
 | Registry | **ACR Premium**: no public access, CMK, private endpoint, MCR pull-through cache, the only sanctioned image source (`workload/acr.tf`). |
 | Private access | Private endpoints + private DNS for ACR and Key Vault, so the private cluster pulls images and reads secrets with no internet path (`workload/private-endpoints.tf`). |
 | Backup | Geo-redundant Backup vault with soft delete, protecting the database (`workload/backup.tf`). |
-| Network | Prod VNet `10.3`, no public IP/NAT, egress `0.0.0.0/0` to the hub firewall, app/data NSGs, NSG flow logs (`workload/network.tf`, `workload/flow-logs.tf`). |
+| Network | Prod VNet `10.3`, no public IP/NAT, egress `0.0.0.0/0` to the hub firewall, app/data NSGs (`workload/network.tf`, `workload/segmentation.tf`). VNet flow logs are deferred until the azurerm v4 upgrade. |
 
 Because a private AKS cluster with UDR egress cannot provision unless the firewall
 permits AKS's required destinations, `workload/aks-egress-firewall.tf` attaches an

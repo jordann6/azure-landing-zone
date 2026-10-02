@@ -11,7 +11,7 @@ resource "random_string" "kv" {
 }
 
 resource "azurerm_key_vault" "workload" {
-  # checkov:skip=CKV_AZURE_189:Public network access stays on (ACL default-Deny + AzureServices bypass + deployer IP) because the AKS etcd KMS uses key_vault_network_access=Public; a fully private KV is the production upgrade (a private endpoint is already provisioned).
+  # checkov:skip=CKV_AZURE_189:Public network access stays on (ACL default-Deny + AzureServices bypass + deployer IP) so the deployer can create the keys and the DB secret over the data plane on first apply. Workloads, including the AKS etcd KMS (key_vault_network_access=Private), reach the vault over the private endpoint; disabling public access entirely (deploying from inside the network) is the production upgrade.
   name                       = "kv-${var.project}-wl-${random_string.kv.result}"
   location                   = azurerm_resource_group.prod.location
   resource_group_name        = azurerm_resource_group.prod.name

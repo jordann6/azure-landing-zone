@@ -13,11 +13,11 @@ call out where this repo adds a preventive (Deny) control on top of that scoring
 
 | CIS area | Control (abbrev) | How it is implemented here | Resource |
 |---|---|---|---|
-| 1. Identity | Restrict privileged access, no standing prod write | Entra persona groups bound at MG scope; prod write is PIM-eligible only, not standing | `identity.tf` (`azuread_group.personas`, `azurerm_role_assignment.personas`, `azurerm_pim_eligible_role_assignment.prod_write`) |
+| 1. Identity | Restrict privileged access, no standing prod write | Entra persona groups bound at MG scope; prod write is designed as PIM-eligible only (target model; this deployment ran with `enable_pim = false` on a tenant without Entra ID P2, see `access-model.md`) | `identity.tf` (`azuread_group.personas`, `azurerm_role_assignment.personas`, `azurerm_pim_eligible_role_assignment.prod_write`) |
 | 1. Identity | Custom roles / least privilege by scope | RBAC granted at the narrowest MG (junior at Dev, platform at Workloads, finops/security at root read-only) | `identity.tf` `local.role_bindings` |
 | 2. Defender | Enable Defender for Cloud + CIS assessment | Free foundational CSPM renders the CIS assessment; paid plans gated on | `monitoring.tf` (`azurerm_security_center_subscription_pricing`), initiative in `policies.tf` |
 | 3. Storage | Secure transfer, no public blob, private access | Deny public IP + private-endpoint pattern; blob privatelink DNS zone provisioned | `policies.tf` `deny_public_ip`, `private_endpoints.tf` |
-| 4. Database | Private data tier, no public path | Spokes carry default-deny NSGs; data tier segmentation is Phase 5 (Azure SQL failover) | `modules/landing-zone/main.tf` NSG; Phase 5 pending |
+| 4. Database | Private data tier, no public path | Zone-redundant PostgreSQL Flexible Server, VNet-injected with public access disabled, CMK-encrypted, Entra auth on; data NSG allows 5432 only from the app/AKS subnets (plus intra-subnet HA replication); geo-redundant Backup vault with soft delete | `workload/postgres.tf`, `workload/segmentation.tf`, `workload/backup.tf` |
 | 5. Logging | Central log profile, retention, Key Vault logging | Central Log Analytics workspace; diagnostic settings on hub VNet and Key Vault (AuditEvent) | `monitoring.tf` |
 | 6. Networking | Restrict inbound, no open admin ports | Management NSG denies inbound Internet; Bastion is the only admin path; no public VM IPs | `network.tf` NSG, `bastion.tf` |
 | 6. Networking | Central egress inspection | Azure Firewall with a UDR forcing 0.0.0.0/0 through it from every spoke | `firewall_azure.tf` |
@@ -39,9 +39,13 @@ blocked at create time rather than only flagged after the fact:
 
 ## Honest gaps in this demo
 
-- **Data tier (CIS 4)**: private data subnets exist via the default-deny NSG, but
-  the managed database, immutable backup vault, and failover are Phase 5 work
-  (reusing `azure-secrets-lifecycle` / `azure-backup-system` / `azure-multi-region-failover`), not built here.
+- **Data tier (CIS 4)**: the managed database, segmentation, and geo-redundant
+  backup are built in `workload/`. Still open: backup vault immutability (needs
+  azurerm v4) and cross-region database failover.
+- **PIM (CIS 1)**: the JIT-to-Prod eligible assignment is in code but was not
+  created in this deployment (no Entra ID P2). The persona groups and MG-scoped
+  RBAC are live.
+- **VNet flow logs**: deferred until the azurerm v4 upgrade.
 - **HSM-backed keys (CIS 8)**: the CMK is software-protected; an HSM key needs a
   Premium vault, out of the demo budget. Documented as the upgrade path.
 - **Defender paid plans**: off by default (they bill per resource). Free

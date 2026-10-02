@@ -1,11 +1,12 @@
 # Azure LZ Workload (AKS paved road) — Handoff, updated 2026-09-27
 
-## Status: FULLY DEPLOYED and healthy in centralus (uncommitted). Costs ~$2.1–2.3/hr.
+## Status: DEPLOYED, verified, and DESTROYED 2026-09-27. Committed (b38d461) on `phase3-azure`.
 
-The base LZ + workload paved road are live end to end in **centralus** (first time the
-workload has fully landed). **Nothing is committed** — all on disk on branch `phase3-azure`.
+The base LZ + workload paved road landed end to end in **centralus** (ran at ~$2.1-2.3/hr
+while up), were verified green, then destroyed. One remnant remains: the backup vault in
+`rg-alz-prod-workload` (see "Known teardown remnant" below).
 
-Verified green (2026-09-27):
+Verified green while deployed (2026-09-27):
 - **AKS** `aks-alz-prod`: 2 nodes Ready (v1.35.7, private, internal-only). provisioningState
   Succeeded. etcd **KMS enabled, keyVaultNetworkAccess = Private** (CMK over the KV private
   endpoint). OIDC issuer + workload identity enabled. **API Server VNet Integration enabled.**
@@ -46,9 +47,7 @@ Verified green (2026-09-27):
 
 ## What's left
 
-- **Commit** (Jordan's call) — one commit on `phase3-azure`.
-- **Regenerate the workload diagram** (`docs/workload.py`) — add `snet-apiserver` + centralus label.
-- **Destroy** after capturing portfolio evidence (destroy-demo-destroy). Sequence below.
+- **Final cleanup** after the ~14-day backup soft-delete window: re-run the workload destroy (see remnant below).
 - **VNet flow logs** — still deferred until the azurerm v4 bump.
 - Minor: unused `kubernetes_version` var in `workload/variables.tf`.
 
@@ -60,6 +59,19 @@ terraform -chdir=/Users/jordannelson/azure-landing-zone/terraform destroy -auto-
 ```
 Residual by design: soft-deleted Key Vaults (~$1–2/mo). If a workload resource wedges the destroy,
 `az group delete -n rg-alz-prod-workload --yes` then re-run the base destroy.
+
+### Known teardown remnant (2026-09-27): backup vault soft-delete
+The workload destroy left 3 resources in state — `azurerm_data_protection_backup_policy...prod`,
+`...backup_vault.prod`, `azurerm_resource_group.prod` — because the deleted PG backup instance
+`bi-alz-postgres` went to **soft-deleted** state and the policy can't delete while associated with it
+(`UserErrorPolicyAssociatedWithSoftDeletedItems`). The vault requires **Always-On soft delete**
+(`--soft-delete-state Off` is rejected as `DppAlwaysOnSoftDeleteStateMandatory`), and there is no
+purge command, so the soft-deleted instance can't be removed on demand — it auto-expires with the
+14-day soft-delete retention. Cost is ~$0 (no standing vault charge; the short-lived instance holds
+negligible/zero backup storage). **Final cleanup:** after the retention window, re-run
+`terraform -chdir=workload destroy -auto-approve` (or `az group delete -n rg-alz-prod-workload --yes`)
+to clear the vault + policy + RG and empty the workload state. Only `bv-alz-prod` remains in the RG;
+AKS/PG/ACR/VNet/KV are all gone (workload compute/DB billing stopped).
 
 ## Environment facts
 
