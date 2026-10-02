@@ -1,0 +1,32 @@
+name: Destroy (manual teardown)
+
+# Manual teardown: terraform destroy, then a post-destroy check that fails if any
+# hourly-billed resource survived (the teardown verification). Gated by the
+# `destroy` environment so a teardown is a recorded, approved act.
+#
+# INACTIVE for Azure, same reason as apply.yml: the shared tf-destroy.yml
+# configures AWS credentials only. Teardowns for this repo run locally
+# (make destroy, then scripts/verify-teardown.sh).
+#
+# ACTIVATE once platform-guardrails gains an azure/login OIDC path:
+#   1. add the azure/login step + inputs to tf-destroy.yml, cut a new tag
+#   2. create a `destroy` GitHub environment with a required reviewer
+#   3. bump the pin below and pass the Azure inputs
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  destroy:
+    permissions:
+      contents: read
+      id-token: write
+    uses: jordann6/platform-guardrails/.github/workflows/tf-destroy.yml@v1.3.0
+    with:
+      terraform_dir: terraform
+      environment: destroy
+      aws_role_arn: ""
+      aws_region: ""
+      check_only: false

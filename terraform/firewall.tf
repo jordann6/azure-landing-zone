@@ -19,6 +19,9 @@ locals {
 
 # --- NVA subnets in the hub ---
 resource "azurerm_subnet" "fw_untrust" {
+  # checkov:skip=CKV2_AZURE_31:NVA data-plane subnet for the opt-in FortiGate
+  # (off by default). A blanket NSG here would break the appliance's own traffic
+  # steering; the FortiGate enforces its policy in place of a subnet NSG.
   count                = local.fw_count
   name                 = "snet-fw-untrust"
   resource_group_name  = azurerm_resource_group.hub.name
@@ -27,6 +30,8 @@ resource "azurerm_subnet" "fw_untrust" {
 }
 
 resource "azurerm_subnet" "fw_trust" {
+  # checkov:skip=CKV2_AZURE_31:NVA data-plane subnet for the opt-in FortiGate
+  # (off by default); the appliance enforces policy in place of a subnet NSG.
   count                = local.fw_count
   name                 = "snet-fw-trust"
   resource_group_name  = azurerm_resource_group.hub.name
@@ -47,6 +52,9 @@ resource "azurerm_public_ip" "fw_untrust" {
 
 # --- NICs: port1 untrust (public), port2 trust (internal next hop) ---
 resource "azurerm_network_interface" "fw_untrust" {
+  # checkov:skip=CKV_AZURE_119:The untrust interface is deliberately the
+  # internet-facing edge of the opt-in FortiGate NVA; a public IP here is the
+  # design, not a leak.
   count                 = local.fw_count
   name                  = "nic-${var.project}-fgt-port1"
   location              = azurerm_resource_group.hub.location
@@ -83,6 +91,11 @@ resource "azurerm_network_interface" "fw_trust" {
 #   az vm image terms accept --publisher fortinet \
 #     --offer fortinet_fortigate-vm_v5 --plan <fortigate_image_sku>
 resource "azurerm_virtual_machine" "fortigate" {
+  # checkov:skip=CKV2_AZURE_12:The FortiGate is a stateless network appliance
+  # (opt-in, off by default); its config lives on the data disk and is rebuilt
+  # from IaC, so Azure Backup of the VM is not the recovery model.
+  # checkov:skip=CKV2_AZURE_10:Antimalware does not apply to a FortiGate firewall
+  # appliance image.
   count                        = local.fw_count
   name                         = "vm-${var.project}-fortigate"
   location                     = azurerm_resource_group.hub.location
@@ -147,9 +160,9 @@ resource "azurerm_virtual_machine" "fortigate" {
 }
 
 # --- Force each spoke's workload subnet egress through the FortiGate ---
-resource "azurerm_route_table" "spoke_egress" {
+resource "azurerm_route_table" "fgt_egress" {
   count               = local.fw_count
-  name                = "rt-${var.project}-spoke-egress"
+  name                = "rt-${var.project}-fgt-egress"
   location            = azurerm_resource_group.hub.location
   resource_group_name = azurerm_resource_group.hub.name
   tags                = local.tags
@@ -162,14 +175,9 @@ resource "azurerm_route_table" "spoke_egress" {
   }
 }
 
-resource "azurerm_subnet_route_table_association" "spoke_platform" {
-  count          = local.fw_count
-  subnet_id      = module.spoke_platform.workload_subnet_id
-  route_table_id = azurerm_route_table.spoke_egress[0].id
-}
+resource "azurerm_subnet_route_table_association" "fgt_spoke" {
+  for_each = local.fw_count == 1 ? local.spoke_workload_subnet_ids : {}
 
-resource "azurerm_subnet_route_table_association" "spoke_sandbox" {
-  count          = local.fw_count
-  subnet_id      = module.spoke_sandbox.workload_subnet_id
-  route_table_id = azurerm_route_table.spoke_egress[0].id
+  subnet_id      = each.value
+  route_table_id = azurerm_route_table.fgt_egress[0].id
 }
