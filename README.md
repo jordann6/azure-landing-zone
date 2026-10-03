@@ -185,6 +185,11 @@ Standard public IPs, VMs, private endpoints) is still alive.
 - **Demo window** (flags on, ~2 hours): Azure Firewall Standard ~$1.25/hr, Bastion
   Basic ~$0.19/hr, private endpoints ~$0.01/hr each, Log Analytics ~free at demo
   volume. Roughly $3, under the portfolio's ~$7 ceiling.
+- **Deployer IP drift**: the Key Vault firewall allows only `deployer_ip_cidrs`.
+  If your public IP changes between applies, the key read fails with
+  `ForbiddenByFirewall`; update the tfvars (`curl -4 ifconfig.me`) and re-apply.
+- **New policy assignments take time**: freshly created assignments can take up to
+  ~30 minutes to start enforcing, so run `make test` after that window.
 - **Traps**: Azure Firewall and any Gateway take **10-30 min** to delete; the
   resource group goes last. `enable_firewall` and `enable_fortigate` are mutually
   exclusive (both force `0.0.0.0/0` through a different next hop). Azure DDoS
