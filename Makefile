@@ -13,9 +13,10 @@ fmt: ## Terraform format check
 	$(TF) -chdir=$(TF) fmt -check -recursive || terraform fmt -check -recursive terraform
 
 .PHONY: validate
-validate: ## Terraform init (no backend) + validate, both roots
+validate: ## Terraform init (no backend) + validate, all three roots
 	terraform -chdir=terraform init -backend=false && terraform -chdir=terraform validate
 	terraform -chdir=workload init -backend=false && terraform -chdir=workload validate
+	terraform -chdir=portal init -backend=false && terraform -chdir=portal validate
 
 .PHONY: diagram
 diagram: ## Regenerate docs/architecture.png + docs/workload-architecture.png
@@ -52,6 +53,22 @@ deploy-workload: ## Prod paved road (HOURLY): private AKS + CMK etcd/disk + Post
 	@echo "==> Set deployer_ip_cidrs in workload/terraform.tfvars first (cp workload/example.tfvars ...)."
 	terraform -chdir=workload init
 	terraform -chdir=workload apply
+
+.PHONY: deploy-portal
+deploy-portal: ## Member portal (HOURLY): Front Door Premium + WAF, Container Apps x2 regions, SQL failover group, APIM, Logic App, External ID
+	@echo "==> Requires the base landing zone applied with the portal policy carve-outs (ops_action_group_id output)."
+	@echo "==> HOURLY: Front Door Premium (~\$$0.45/hr) + 2x SQL serverless + 2x Container Apps + APIM Consumption."
+	terraform -chdir=portal init
+	terraform -chdir=portal apply
+	@echo "==> Next: scripts/portal-approve-private-links.sh, then scripts/portal-build-image.sh"
+
+.PHONY: portal-smoke
+portal-smoke: ## End-to-end portal check through Front Door, WAF, and APIM
+	scripts/portal-smoke.sh
+
+.PHONY: destroy-portal
+destroy-portal: ## Tear down the member portal (run scripts/portal-external-id.ps1 -Teardown first)
+	terraform -chdir=portal destroy
 
 .PHONY: test
 test: ## Prove the guardrails actually deny, not just that apply succeeded

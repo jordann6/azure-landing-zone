@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Member Portal</title>
+  <style>
+    :root { --bg: #f7f7f5; --fg: #1a1a1a; --muted: #5c5c5c; --accent: #0b5c9e; --card: #ffffff; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #16181b; --fg: #ececec; --muted: #a3a3a3; --accent: #5aa9e6; --card: #202327; } }
+    body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+    main { max-width: 640px; margin: 48px auto; padding: 0 16px; }
+    .card { background: var(--card); border-radius: 10px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 10px 16px; font-size: 15px; cursor: pointer; }
+    pre { white-space: pre-wrap; color: var(--muted); }
+    small { color: var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1>Member Portal</h1>
+    <p>Sign in with your pharmacy account to see your profile.</p>
+    <button id="signin">Sign in</button>
+    <pre id="out"></pre>
+    <small id="region"></small>
+  </div>
+</main>
+<script src="/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/lib/msal-browser.min.js"></script>
+<script>
+  const cfg = window.PORTAL_CONFIG;
+  const out = document.getElementById("out");
+  document.getElementById("region").textContent = "Served from " + cfg.region;
+  if (!cfg.clientId) {
+    out.textContent = "Sign-in is not configured yet (run scripts/portal-external-id.ps1).";
+    document.getElementById("signin").disabled = true;
+  } else {
+    const client = new msal.PublicClientApplication({
+      auth: { clientId: cfg.clientId, authority: cfg.authority, redirectUri: window.location.origin },
+      cache: { cacheLocation: "sessionStorage" }
+    });
+    client.initialize().then(() => {
+      document.getElementById("signin").onclick = async () => {
+        try {
+          const result = await client.loginPopup({ scopes: ["openid", "profile", "email"] });
+          const res = await fetch("/api/me", { headers: { Authorization: "Bearer " + result.idToken } });
+          out.textContent = JSON.stringify(await res.json(), null, 2);
+        } catch (e) {
+          out.textContent = "Sign-in failed: " + e.message;
+        }
+      };
+    });
+  }
+</script>
+</body>
+</html>
