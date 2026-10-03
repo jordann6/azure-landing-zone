@@ -1,0 +1,7 @@
+// Every request a Deny policy blocked, newest first: who tried what, where.
+AzureActivity
+| where CategoryValue == "Policy"
+| where OperationNameValue =~ "Microsoft.Authorization/policies/deny/action"
+| extend policy = tostring(parse_json(tostring(parse_json(Properties).policies))[0].policyDefinitionName)
+| project TimeGenerated, Caller, ResourceGroup, policy, _ResourceId
+| order by TimeGenerated desc

@@ -1,0 +1,7 @@
+// Key Vault requests refused with 403, grouped by caller and source IP per hour.
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.KEYVAULT"
+| where ResultSignature == "Forbidden"
+| summarize denied = count() by bin(TimeGenerated, 1h), Resource, OperationName,
+    caller = coalesce(identity_claim_upn_s, identity_claim_oid_g), CallerIPAddress
+| order by TimeGenerated desc

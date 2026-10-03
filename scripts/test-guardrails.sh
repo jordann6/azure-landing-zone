@@ -52,6 +52,35 @@ if denied "$out"; then ok "untagged RG blocked by require-tag policies"; else
   bad "untagged RG was NOT blocked"; az group delete -n "rg-${PROJECT}-notags" -y >/dev/null 2>&1
 fi
 
+echo "-- deny unknown data_classification value --"
+out=$(az group create -n "rg-${PROJECT}-badclass" -l "$LOCATION" \
+  --tags owner=t cost_center=t environment=t data_classification=secret 2>&1)
+if denied "$out"; then ok "data_classification=secret blocked by allowed-values policy"; else
+  bad "unknown data_classification was NOT blocked"; az group delete -n "rg-${PROJECT}-badclass" -y >/dev/null 2>&1
+fi
+
+echo "-- deny public network access in a phi resource group --"
+RG_PHI="rg-${PROJECT}-phi-test"
+az group create -n "$RG_PHI" -l "$LOCATION" \
+  --tags owner=guardrail-test cost_center=platform environment=test data_classification=phi \
+  >/dev/null 2>&1
+SA_NAME="stphi$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 12)"
+out=$(az storage account create -g "$RG_PHI" -n "$SA_NAME" -l "$LOCATION" \
+  --sku Standard_LRS --public-network-access Enabled 2>&1)
+if denied "$out"; then ok "public storage account in a phi RG blocked by phi policy"; else
+  bad "public storage account in a phi RG was NOT blocked"; az storage account delete -g "$RG_PHI" -n "$SA_NAME" -y >/dev/null 2>&1
+fi
+az group delete -n "$RG_PHI" -y --no-wait >/dev/null 2>&1
+
+echo "-- HITRUST/HIPAA initiative assigned (scoring only) --"
+if az policy assignment list \
+     --scope "/providers/Microsoft.Management/managementGroups/${ROOT_MG}" \
+     --query "[?name=='hitrust-hipaa'] | length(@)" -o tsv 2>/dev/null | grep -q '^[1-9]'; then
+  ok "HITRUST/HIPAA initiative is assigned"
+else
+  bad "HITRUST/HIPAA initiative assignment not found"
+fi
+
 echo "-- CIS initiative assigned --"
 if az policy assignment list \
      --scope "/providers/Microsoft.Management/managementGroups/${ROOT_MG}" \

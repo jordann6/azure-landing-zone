@@ -117,3 +117,19 @@ resource "azurerm_postgresql_flexible_server_database" "app" {
   charset   = "UTF8"
   collation = "en_US.utf8"
 }
+
+# Server logs (connections, errors, slow queries) and metrics to the central
+# workspace, next to the AKS audit logs, so an app error and the database event
+# behind it can be joined in one query.
+resource "azurerm_monitor_diagnostic_setting" "pg" {
+  name                       = "diag-postgres"
+  target_resource_id         = azurerm_postgresql_flexible_server.prod.id
+  log_analytics_workspace_id = local.law_id
+
+  enabled_log { category_group = "allLogs" }
+
+  metric {
+    category = "AllMetrics"
+    enabled  = true
+  }
+}

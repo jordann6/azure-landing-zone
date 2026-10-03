@@ -10,8 +10,12 @@ resource "azurerm_consumption_budget_subscription" "monthly" {
   amount     = var.budget_amount
   time_grain = "Monthly"
 
+  # Azure rejects a monthly budget whose start date is before the current month,
+  # so a hardcoded date breaks the first time the stack is redeployed in a later
+  # month. Start on the first of the month the apply runs in, and ignore the
+  # drift afterwards so the budget is not recreated every plan.
   time_period {
-    start_date = "2026-09-01T00:00:00Z"
+    start_date = formatdate("YYYY-MM-01'T'00:00:00Z", timestamp())
   }
 
   notification {
@@ -36,5 +40,9 @@ resource "azurerm_consumption_budget_subscription" "monthly" {
     operator       = "GreaterThanOrEqualTo"
     threshold_type = "Forecasted"
     contact_emails = [var.alert_email]
+  }
+
+  lifecycle {
+    ignore_changes = [time_period]
   }
 }

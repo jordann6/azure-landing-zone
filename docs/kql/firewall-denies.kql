@@ -1,0 +1,8 @@
+// What the hub firewall blocked, by source and destination, last 24 hours.
+union isfuzzy=true
+    (AZFWApplicationRule | extend Destination = Fqdn),
+    (AZFWNetworkRule | extend Destination = strcat(DestinationIp, ":", DestinationPort))
+| where TimeGenerated > ago(24h)
+| where Action == "Deny"
+| summarize denies = count() by SourceIp, Destination, Type
+| order by denies desc
