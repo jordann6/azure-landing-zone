@@ -33,6 +33,12 @@ variable "firewall_deny_alert_threshold" {
   description = "Firewall denies per 15 minutes above which the deny-spike alert fires."
 }
 
+variable "platform_managed_resource_groups" {
+  type        = list(string)
+  default     = ["rg-alz-portal-cus-aca-infra", "rg-alz-portal-eus2-aca-infra"]
+  description = "Resource groups created by Azure services for their own infrastructure (Container Apps environments in portal/). Excluded from the tag-required policies only."
+}
+
 # --- Feature flags (default true in code; a gitignored terraform.tfvars turns
 # the hourly-billed ones off for a cheap governance-only apply, mirroring the
 # AWS reduced-footprint pattern). ---
