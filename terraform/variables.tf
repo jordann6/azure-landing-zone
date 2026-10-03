@@ -27,6 +27,12 @@ variable "alert_email" {
   description = "Budget-alert recipient."
 }
 
+variable "firewall_deny_alert_threshold" {
+  type        = number
+  default     = 50
+  description = "Firewall denies per 15 minutes above which the deny-spike alert fires."
+}
+
 # --- Feature flags (default true in code; a gitignored terraform.tfvars turns
 # the hourly-billed ones off for a cheap governance-only apply, mirroring the
 # AWS reduced-footprint pattern). ---

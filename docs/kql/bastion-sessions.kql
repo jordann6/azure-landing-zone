@@ -1,0 +1,4 @@
+// Who connected through Bastion, to which VM, from where, and for how long.
+MicrosoftAzureBastionAuditLogs
+| project TimeGenerated, UserName, TargetVMIPAddress, ClientIpAddress, Protocol, SessionStartTime, SessionEndTime, Duration
+| order by TimeGenerated desc

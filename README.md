@@ -81,13 +81,27 @@ Same design contract, three different control planes:
 - An **opt-in FortiGate NVA** is the alternative third-party egress path
   (`terraform/firewall.tf`), mutually exclusive with Azure Firewall.
 
-**Logging, encryption, cost.**
-- Central **Log Analytics** workspace with diagnostic settings on the hub VNet and
-  Key Vault; **Defender for Cloud** free CSPM renders the CIS assessment
+**Logging, monitoring, encryption, cost.**
+- Central **Log Analytics** workspace in its own resource group, receiving the
+  subscription **Activity Log**, Key Vault audit events, **Azure Firewall rule
+  logs** (resource-specific `AZFW*` tables), and **Bastion session audit**;
+  **Defender for Cloud** free CSPM renders the CIS and HIPAA assessments
   (`terraform/monitoring.tf`).
+- **Alerting** through one action group: any Deny policy event, any Key Vault 403,
+  and a firewall deny spike (`terraform/alerts.tf`). The matching investigation
+  queries are saved in [docs/kql/](docs/kql/).
 - **Key Vault** with purge protection + soft delete + default-Deny network ACL, and
   a **CMK with a rotation policy** (`terraform/keyvault.tf`).
 - A monthly **budget** with actual + forecast alerts (`terraform/budgets.tf`).
+
+**HIPAA technical safeguards.**
+- The built-in **HITRUST/HIPAA** initiative at the root management group, scoring
+  only (`enforce = false`), so Defender for Cloud scores every tier against HIPAA
+  next to CIS.
+- `data_classification` limited to `public`, `internal`, `confidential`, `phi` by
+  a Deny policy, and a resource group tagged **`phi`** cannot hold a Key Vault,
+  storage account, SQL server, or PostgreSQL server with public network access
+  (`terraform/hipaa.tf`). See [docs/hipaa-mapping.md](docs/hipaa-mapping.md).
 
 ## Workload paved road (prod tier, `workload/`)
 
@@ -148,9 +162,11 @@ make test    # scripts/test-guardrails.sh
 
 It does not just check that apply succeeded. It asserts that Azure **refuses**: a
 public IP (deny_public_ip), a resource group in a disallowed location
-(allowed_locations), and an untagged resource group (require-tag), each returning
-`RequestDisallowedByPolicy`; that the CIS initiative is assigned; and that Bastion
-is the admin path. It prints pass/fail per check and cleans up anything it created.
+(allowed_locations), an untagged resource group (require-tag), a resource group
+with an unknown `data_classification`, and a storage account with public network
+access inside a `phi` resource group, each returning `RequestDisallowedByPolicy`;
+that the CIS and HITRUST/HIPAA initiatives are assigned; and that Bastion is the
+admin path. It prints pass/fail per check and cleans up anything it created.
 
 ## Destroy
 
@@ -211,12 +227,14 @@ without IDPS, software-protected key) are inline-skipped with reasons in the cod
 - [docs/cis-mapping.md](docs/cis-mapping.md): CIS control → Terraform resource, with honest gaps.
 - [docs/access-model.md](docs/access-model.md): persona-by-scope matrix, PIM/JIT, single-sub design.
 - [docs/accelerator-vs-bespoke.md](docs/accelerator-vs-bespoke.md): why bespoke modules over the ALZ accelerator.
+- [docs/hipaa-mapping.md](docs/hipaa-mapping.md): HIPAA 164.312 technical safeguards → Terraform resource, with honest gaps.
+- [docs/kql/](docs/kql/): saved investigation queries behind the alerts.
 
 ## Tech stack
 
 - **Terraform** `>= 1.6`, `azurerm ~> 3.100`, `azuread ~> 2.50`, Azure Storage state backend
-- **Azure Management Groups + Azure Policy** (Deny) + built-in CIS initiative
+- **Azure Management Groups + Azure Policy** (Deny) + built-in CIS and HITRUST/HIPAA initiatives
 - **Azure Firewall + Bastion + UDR + Private Endpoints/DNS** hub-spoke inspection
-- **Log Analytics + Defender for Cloud**, **Key Vault + CMK rotation**
+- **Log Analytics + Azure Monitor alerts + Defender for Cloud**, **Key Vault + CMK rotation**
 - **Entra ID** persona groups + MG-scope RBAC + PIM
 - Reusable `landing-zone` spoke-vending module

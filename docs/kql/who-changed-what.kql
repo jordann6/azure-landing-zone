@@ -1,0 +1,8 @@
+// Control-plane writes and deletes in the last 7 days: who changed what.
+AzureActivity
+| where TimeGenerated > ago(7d)
+| where CategoryValue == "Administrative"
+| where OperationNameValue endswith "/write" or OperationNameValue endswith "/delete"
+| where ActivityStatusValue == "Success"
+| project TimeGenerated, Caller, OperationNameValue, ResourceGroup, _ResourceId
+| order by TimeGenerated desc
