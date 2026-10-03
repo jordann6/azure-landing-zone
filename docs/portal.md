@@ -40,6 +40,40 @@ handled separately and neither depends on the other.
   period (the minimum, to avoid flapping on a short blip); a planned failover is
   immediate. `scripts/portal-failover-drill.sh data` measures RTO and RPO.
 
+## Measured, not claimed (2026-10-03)
+
+Deployed and drilled live (app tier westus2 + eastus2, data tier centralus +
+westus2):
+
+| Test | Result |
+|---|---|
+| Smoke test (`make portal-smoke`) | 7 of 7: health through Front Door, order write and read, daily report, WAF blocked a SQL injection probe (403), partner API with a key (200), without a key (401) |
+| App-tier drill: westus2 ingress disabled | Front Door served every request from eastus2 **83.9 s** after the disable command started (includes the command's own run time) |
+| Data-tier drill: planned failover centralus to westus2, writing every second | Longest gap between successful writes (**RTO**) **7.3 s**; **0** acknowledged writes lost (**RPO**) |
+| Data-tier failback: westus2 to centralus | RTO **7.4 s**; **0 of 36** acknowledged writes lost |
+
+Both data drills are planned failovers, which are lossless by design; an
+unplanned (forced) failover can lose recent writes, which is what the 60-minute
+automatic grace period protects against.
+
+## What the first deploy taught
+
+- **Capacity is a design input.** Container Apps had no capacity in centralus,
+  and Azure SQL is restricted for this subscription in eastus, eastus2, and
+  northcentralus. Regions are now chosen per tier.
+- **My own guardrail blocked my own deploy.** westus2 was not in the base
+  allowed-locations list, so Azure Policy denied the resource group. The fix was
+  a reviewed one-line change to the governed list, live in about 30 seconds.
+- **Do not block startup on a dependency.** The app created its table before
+  listening, so the liveness probe killed it before it served a request. Schema
+  setup now runs in a background thread.
+- **Container Apps managed identity is not the VM metadata endpoint.** The ODBC
+  driver's built-in `ActiveDirectoryMsi` timed out (`HYT00 Login timeout
+  expired`) even though DNS and the private endpoint were correct. The app now
+  gets the token from `azure-identity` and hands it to the driver.
+- **Front Door routes take minutes to propagate.** A fresh route returned Front
+  Door's own 404 (`x-cache: CONFIG_NOCACHE`) for about 7 minutes.
+
 ## Decisions and trade-offs
 
 | Decision | Why | Trade-off |
@@ -109,7 +143,6 @@ portfolio's single-digit-dollar ceiling.
 
 ## Honest gaps
 
-- **Drill numbers** come from running the drill; see the run log in the PR.
 - **No hub egress inspection for the portal.** The portal VNets are not peered
   to the hub or routed through Azure Firewall; Container Apps forced egress
   needs its own firewall allowlist, a follow-up.

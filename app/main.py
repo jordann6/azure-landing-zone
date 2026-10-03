@@ -8,6 +8,7 @@ requests that did not come through this Front Door profile.
 
 import logging
 import os
+import struct
 import threading
 import time
 from functools import lru_cache
@@ -59,13 +60,32 @@ async def require_front_door(request: Request, call_next):
 
 # ── Database ────────────────────────────────────────────────────────────────
 
+# Connection attribute that hands the driver an Entra access token directly.
+SQL_COPT_SS_ACCESS_TOKEN = 1256
+
+
+@lru_cache(maxsize=1)
+def credential():
+    from azure.identity import ManagedIdentityCredential
+
+    return ManagedIdentityCredential(client_id=AZURE_CLIENT_ID)
+
+
 def connect() -> pyodbc.Connection:
-    """Connect with the user-assigned managed identity. No password exists."""
+    """Connect with the user-assigned managed identity. No password exists.
+
+    The token comes from azure-identity rather than the driver's built-in
+    Authentication=ActiveDirectoryMsi: Container Apps serves managed identity
+    tokens from its own endpoint, not the VM metadata endpoint the driver
+    probes, and the first deploy timed out on exactly that.
+    """
+    token = credential().get_token("https://database.windows.net/.default").token.encode("utf-16-le")
+    token_struct = struct.pack(f"<I{len(token)}s", len(token), token)
     return pyodbc.connect(
         "Driver={ODBC Driver 18 for SQL Server};"
         f"Server=tcp:{SQL_SERVER},1433;Database={SQL_DATABASE};"
-        f"Authentication=ActiveDirectoryMsi;UID={AZURE_CLIENT_ID};"
         "Encrypt=yes;TrustServerCertificate=no;Connection Timeout=15;",
+        attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct},
         timeout=15,
     )
 
@@ -92,7 +112,7 @@ def ensure_schema() -> None:
                 conn.commit()
             log.info("schema ready")
             return
-        except pyodbc.Error as exc:
+        except Exception as exc:  # pyodbc or token errors
             log.warning("schema attempt %s failed: %s", attempt, exc)
             time.sleep(10)
 
@@ -129,7 +149,7 @@ def health():
                 "SELECT @@SERVERNAME, CAST(DATABASEPROPERTYEX(DB_NAME(), 'Updateability') AS NVARCHAR(32))"
             ).fetchone()
         return {"status": "ok", "region": REGION, "sql_server": row[0], "updateability": row[1]}
-    except pyodbc.Error as exc:
+    except Exception as exc:  # pyodbc or token errors
         log.error("health check failed: %s", exc)
         return JSONResponse({"status": "degraded", "region": REGION}, status_code=503)
 

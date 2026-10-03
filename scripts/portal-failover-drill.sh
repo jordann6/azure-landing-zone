@@ -71,7 +71,7 @@ data_drill() {
 
   echo "== After -> $(curl -s -m 10 "$URL/health" | jq -c '{sql_server, updateability}')"
   python3 - "$log" "$t0" "$t1" "$URL" <<'PY'
-import json, sys, urllib.request
+import sys
 log, t0, t1, url = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
 rows = [l.split() for l in open(log) if l.strip()]
 rows = [(float(t), c, i) for t, c, i in rows]
@@ -84,12 +84,15 @@ for t, c, _ in rows:
             gap = max(gap, t - prev)
         prev = t
 failed = sum(1 for r in rows if r[1] != "201")
-# RPO: every acknowledged write must still exist after the failover.
+# RPO: every acknowledged write must still exist after the failover. Checked
+# with curl, not urllib: a python.org macOS install ships without CA
+# certificates, so urllib fails TLS and would report every write as lost.
+import subprocess
 missing = 0
 for _, _, i in ok:
-    try:
-        urllib.request.urlopen(f"{url}/api/orders/{i}", timeout=10)
-    except Exception:
+    code = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "-m", "10",
+                           f"{url}/api/orders/{i}"], capture_output=True, text=True).stdout
+    if code != "200":
         missing += 1
 print(f"  failover command took      {t1 - t0:6.1f}s")
 print(f"  writes attempted/failed    {len(rows)}/{failed}")
