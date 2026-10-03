@@ -6,7 +6,7 @@
 
 resource "azurerm_logic_app_workflow" "daily_report" {
   name                = "logic-${var.project}-portal-daily-report"
-  location            = var.primary_location
+  location            = var.shared_location
   resource_group_name = azurerm_resource_group.edge.name
   tags                = azurerm_resource_group.edge.tags
 

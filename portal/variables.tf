@@ -13,16 +13,38 @@ variable "cost_center" {
   default = "platform"
 }
 
-variable "primary_location" {
+# Regions are chosen per tier by what the subscription can actually provision
+# (checked 2026-10-03): Container Apps had no capacity in centralus, and Azure
+# SQL is restricted for this subscription in eastus, eastus2, and northcentralus.
+# All must be in the base allowed_locations list.
+variable "shared_location" {
   type        = string
   default     = "centralus"
-  description = "Primary region. Must be in the base allowed_locations list."
+  description = "Region for shared, non-regional services: resource groups for edge and data, Application Insights, API Management, Logic App, app identity, and the registry."
+}
+
+variable "primary_location" {
+  type        = string
+  default     = "westus2"
+  description = "App tier, primary region (Front Door priority 1)."
 }
 
 variable "secondary_location" {
   type        = string
   default     = "eastus2"
-  description = "Secondary (failover) region. Must be in the base allowed_locations list."
+  description = "App tier, secondary region (Front Door priority 2)."
+}
+
+variable "sql_primary_location" {
+  type        = string
+  default     = "centralus"
+  description = "Data tier, primary SQL server region."
+}
+
+variable "sql_secondary_location" {
+  type        = string
+  default     = "westus2"
+  description = "Data tier, failover-group partner region."
 }
 
 variable "app_image" {

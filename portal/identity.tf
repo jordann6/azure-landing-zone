@@ -5,9 +5,9 @@
 
 resource "azurerm_user_assigned_identity" "app" {
   name                = "id-${var.project}-portal-app"
-  location            = var.primary_location
-  resource_group_name = azurerm_resource_group.region["primary"].name
-  tags                = azurerm_resource_group.region["primary"].tags
+  location            = var.shared_location
+  resource_group_name = azurerm_resource_group.edge.name
+  tags                = azurerm_resource_group.edge.tags
 }
 
 resource "azurerm_container_registry" "portal" {
@@ -20,11 +20,11 @@ resource "azurerm_container_registry" "portal" {
   # checkov:skip=CKV_AZURE_233:Zone redundancy needs Premium.
   # checkov:skip=CKV_AZURE_237:Dedicated data endpoints need Premium.
   name                = "acr${var.project}portal${local.suffix}"
-  location            = var.primary_location
-  resource_group_name = azurerm_resource_group.region["primary"].name
+  location            = var.shared_location
+  resource_group_name = azurerm_resource_group.edge.name
   sku                 = "Basic"
   admin_enabled       = false
-  tags                = azurerm_resource_group.region["primary"].tags
+  tags                = azurerm_resource_group.edge.tags
 }
 
 resource "azurerm_role_assignment" "app_acr_pull" {

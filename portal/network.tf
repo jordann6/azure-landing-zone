@@ -46,7 +46,7 @@ resource "azurerm_subnet" "pe" {
 }
 
 resource "azurerm_virtual_network_peering" "primary_to_secondary" {
-  name                         = "peer-cus-to-eus2"
+  name                         = "peer-${local.regions.primary.short}-to-${local.regions.secondary.short}"
   resource_group_name          = azurerm_resource_group.region["primary"].name
   virtual_network_name         = azurerm_virtual_network.region["primary"].name
   remote_virtual_network_id    = azurerm_virtual_network.region["secondary"].id
@@ -54,7 +54,7 @@ resource "azurerm_virtual_network_peering" "primary_to_secondary" {
 }
 
 resource "azurerm_virtual_network_peering" "secondary_to_primary" {
-  name                         = "peer-eus2-to-cus"
+  name                         = "peer-${local.regions.secondary.short}-to-${local.regions.primary.short}"
   resource_group_name          = azurerm_resource_group.region["secondary"].name
   virtual_network_name         = azurerm_virtual_network.region["secondary"].name
   remote_virtual_network_id    = azurerm_virtual_network.region["primary"].id

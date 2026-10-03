@@ -13,7 +13,7 @@ resource "azurerm_resource_group" "identity" {
   count = var.enable_external_id ? 1 : 0
 
   name     = "rg-${var.project}-portal-identity"
-  location = var.primary_location
+  location = var.shared_location
   tags     = merge(local.base_tags, { data_classification = "confidential" })
 }
 

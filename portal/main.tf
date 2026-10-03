@@ -29,18 +29,26 @@ locals {
 
   # One entry per region. CIDRs come from the portfolio address plan's growth
   # range (10.5 onward), so nothing overlaps the hub or the tier spokes.
+  # The app tier and the data tier pick regions independently (each from
+  # what has capacity), which matches the two-clock design: Front Door fails
+  # the app over between its regions, the failover group fails the database
+  # over between its regions, and neither depends on the other.
   regions = {
     primary = {
-      location = var.primary_location
-      short    = "cus"
-      cidr     = "10.5.0.0/16"
-      priority = 1
+      location     = var.primary_location
+      short        = "wus2"
+      cidr         = "10.5.0.0/16"
+      priority     = 1
+      sql_location = var.sql_primary_location
+      sql_short    = "cus"
     }
     secondary = {
-      location = var.secondary_location
-      short    = "eus2"
-      cidr     = "10.6.0.0/16"
-      priority = 2
+      location     = var.secondary_location
+      short        = "eus2"
+      cidr         = "10.6.0.0/16"
+      priority     = 2
+      sql_location = var.sql_secondary_location
+      sql_short    = "wus2"
     }
   }
 
@@ -58,7 +66,7 @@ locals {
 # Application Insights. No member data lives here.
 resource "azurerm_resource_group" "edge" {
   name     = "rg-${var.project}-portal-edge"
-  location = var.primary_location
+  location = var.shared_location
   tags     = merge(local.base_tags, { data_classification = "internal" })
 }
 
@@ -75,6 +83,6 @@ resource "azurerm_resource_group" "region" {
 # storage account, or PostgreSQL server here with public network access.
 resource "azurerm_resource_group" "data" {
   name     = "rg-${var.project}-portal-data"
-  location = var.primary_location
+  location = var.shared_location
   tags     = merge(local.base_tags, { data_classification = "phi" })
 }

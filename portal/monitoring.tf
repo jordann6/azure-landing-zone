@@ -7,7 +7,7 @@
 
 resource "azurerm_application_insights" "portal" {
   name                = "appi-${var.project}-portal"
-  location            = var.primary_location
+  location            = var.shared_location
   resource_group_name = azurerm_resource_group.edge.name
   workspace_id        = local.law_id
   application_type    = "web"
@@ -20,7 +20,7 @@ resource "azurerm_application_insights" "portal" {
 resource "azurerm_application_insights_standard_web_test" "health" {
   name                    = "webtest-portal-health"
   resource_group_name     = azurerm_resource_group.edge.name
-  location                = var.primary_location
+  location                = var.shared_location
   application_insights_id = azurerm_application_insights.portal.id
   geo_locations           = var.availability_test_locations
   frequency               = 300
@@ -73,7 +73,7 @@ resource "azurerm_monitor_metric_alert" "availability" {
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "slo_fast_burn" {
   name                  = "alert-portal-slo-fast-burn"
   resource_group_name   = azurerm_resource_group.edge.name
-  location              = var.primary_location
+  location              = var.shared_location
   scopes                = [local.law_id]
   description           = "Portal availability SLO (99.9%) is burning error budget at more than 14.4x in the last hour."
   severity              = 1
@@ -198,7 +198,7 @@ resource "azurerm_monitor_metric_alert" "app_restarts" {
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "waf_blocks" {
   name                  = "alert-portal-waf-blocks"
   resource_group_name   = azurerm_resource_group.edge.name
-  location              = var.primary_location
+  location              = var.shared_location
   scopes                = [local.law_id]
   description           = "The portal WAF blocked more than 100 requests in 15 minutes."
   severity              = 3
@@ -229,7 +229,7 @@ resource "random_uuid" "workbook" {}
 resource "azurerm_application_insights_workbook" "portal" {
   name                = random_uuid.workbook.result
   resource_group_name = azurerm_resource_group.edge.name
-  location            = var.primary_location
+  location            = var.shared_location
   display_name        = "Member portal operations"
   source_id           = lower(local.law_id)
   tags                = azurerm_resource_group.edge.tags

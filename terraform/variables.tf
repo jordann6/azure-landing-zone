@@ -10,7 +10,7 @@ variable "project" {
 
 variable "allowed_locations" {
   type        = list(string)
-  default     = ["centralus", "eastus2", "global"]
+  default     = ["centralus", "eastus2", "westus2", "global"]
   description = "Regions the allowed-locations Deny policy permits."
 }
 

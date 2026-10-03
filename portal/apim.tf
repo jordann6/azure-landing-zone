@@ -15,7 +15,7 @@ resource "azurerm_api_management" "portal" {
   count = var.enable_apim ? 1 : 0
 
   name                = "apim-${var.project}-portal-${local.suffix}"
-  location            = var.primary_location
+  location            = var.shared_location
   resource_group_name = azurerm_resource_group.edge.name
   publisher_name      = "Member Portal"
   publisher_email     = var.alert_email

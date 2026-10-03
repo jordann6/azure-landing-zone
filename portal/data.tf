@@ -12,9 +12,9 @@ resource "azurerm_mssql_server" "region" {
   # checkov:skip=CKV_AZURE_24:Audit events go to the central Log Analytics workspace, whose retention is set once in the base landing zone (30 days for the demo; docs/hipaa-mapping.md records the gap). The 90-day check applies to a storage-account audit target, which is not used.
   for_each = local.regions
 
-  name                          = "sql-${var.project}-portal-${each.value.short}-${local.suffix}"
+  name                          = "sql-${var.project}-portal-${each.value.sql_short}-${local.suffix}"
   resource_group_name           = azurerm_resource_group.data.name
-  location                      = each.value.location
+  location                      = each.value.sql_location
   version                       = "12.0"
   minimum_tls_version           = "1.2"
   public_network_access_enabled = false
@@ -105,9 +105,10 @@ resource "azurerm_private_dns_zone_virtual_network_link" "sql" {
   tags                  = azurerm_resource_group.data.tags
 }
 
-# Each server gets a private endpoint in its own region's VNet. With the zone
-# linked to both VNets and the VNets peered, the failover group listener
-# resolves to the current primary's private IP from either region.
+# Each app region's VNet gets a private endpoint to one SQL server (private
+# endpoints can reach a resource in another region). With the zone linked to
+# both VNets and the VNets peered, the failover group listener resolves to the
+# current primary's private IP from either app region.
 resource "azurerm_private_endpoint" "sql" {
   for_each = local.regions
 

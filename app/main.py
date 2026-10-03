@@ -8,6 +8,7 @@ requests that did not come through this Front Door profile.
 
 import logging
 import os
+import threading
 import time
 from functools import lru_cache
 
@@ -82,11 +83,9 @@ CREATE TABLE dbo.orders (
 """
 
 
-@app.on_event("startup")
 def ensure_schema() -> None:
-    if not SQL_SERVER:
-        return
-    for attempt in range(5):
+    """Create the table if needed, retrying until the database is reachable."""
+    for attempt in range(1, 61):
         try:
             with connect() as conn:
                 conn.execute(SCHEMA)
@@ -94,8 +93,18 @@ def ensure_schema() -> None:
             log.info("schema ready")
             return
         except pyodbc.Error as exc:
-            log.warning("schema attempt %s failed: %s", attempt + 1, exc)
-            time.sleep(5)
+            log.warning("schema attempt %s failed: %s", attempt, exc)
+            time.sleep(10)
+
+
+@app.on_event("startup")
+def start_schema_thread() -> None:
+    # In the background, so the server starts listening immediately and the
+    # Container Apps probes (/livez) pass while the database comes up. A first
+    # deploy showed that blocking startup on SQL gets the container killed by
+    # its liveness probe before it ever serves a request.
+    if SQL_SERVER:
+        threading.Thread(target=ensure_schema, daemon=True).start()
 
 
 # ── Health ──────────────────────────────────────────────────────────────────

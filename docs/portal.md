@@ -13,12 +13,13 @@ action group.
 ```
 member ──HTTPS──▶ Front Door Premium (WAF: Default Rule Set 2.1, Bot Manager, per-IP rate limit)
                     │  health-probes /health in both regions every 30s
-                    │  priority 1 = centralus, priority 2 = eastus2
+                    │  priority 1 = westus2, priority 2 = eastus2
                     ▼  Private Link (managed private endpoint, approved on the environment)
                   Container Apps environment (internal VIP, public network access disabled, no public IP)
                     │  app checks X-Azure-FDID = this Front Door profile
                     ▼  managed identity token (no password)
-                  SQL failover group listener ──▶ current primary server (private endpoint, Entra-only auth)
+                  SQL failover group listener ──▶ current primary server (centralus, partner westus2;
+                                                  private endpoints, Entra-only auth)
 
 partner ──key──▶ API Management (Consumption, rate limit) ──▶ Front Door ──▶ same path
 Logic App (daily 6:00 CT) ──▶ Front Door /api/reports/daily
@@ -46,7 +47,8 @@ handled separately and neither depends on the other.
 | Front Door **Premium** | Private Link origins and managed WAF rule sets are Premium-only. Lets the origin have no public ingress at all. | About $330/month base, billed hourly. Fine for deploy-demo-destroy; Standard plus an origin header check is the budget alternative. |
 | **Container Apps**, internal, public access disabled | No public IP, so the base deny-public-IP policy holds without an exception. App Service would be the more familiar choice, but this subscription has zero App Service VM quota and Container Apps does not draw on it. | Approving the Front Door private endpoint is a separate step (script). |
 | `azapi` for the environment, the origins, and External ID | azurerm 3.x has no `publicNetworkAccess` on the environment, rejects `managedEnvironments` as a Private Link target (tested), and has no External ID resource. | Two providers instead of one; azapi bodies are less type-checked. |
-| **Named** Container Apps infrastructure resource groups | The platform creates them without our tags, so the base tag policies would deny them. Naming them lets the base exclude exactly those two groups from the tag rules, nothing else. | A list to keep in sync between `portal/` and `terraform/variables.tf`. |
+| **Regions chosen per tier, by capacity** | On the first deploy (2026-10-03) Container Apps had no capacity in centralus (`ManagedEnvironmentCapacityHeavyUsageError`), and Azure SQL is restricted for this subscription in eastus, eastus2, and northcentralus (checked with the SQL capabilities API). So the app tier runs in westus2 + eastus2 and the data tier in centralus + westus2. It fits the two-clock design: each tier fails over between its own regions. | One extra hop when the app region and the primary database differ; a few ms. |
+| **Named** Container Apps infrastructure resource groups | Planned as a carve-out from the base tag policies, on the assumption the platform would create them untagged. The first deploy showed Container Apps copies the environment's tags onto the infrastructure group, so the tag policies pass on their own. | The base exclusion list is now redundant and can be removed. |
 | **Failover group listener** from both regions | The app never needs to know which database is primary. | Cross-region writes when the app and the primary are in different regions (a few ms of latency). |
 | SQL **Entra-only**, app identity is the admin | No SQL login or password exists anywhere, including Terraform state. | The app holds admin on its own database. Production would create a contained user with read/write roles from a deployment job inside the VNet. |
 | Data resource group tagged **phi** | The base policy then denies public network access on the SQL servers, so the classification enforces the control. | None; `public_network_access_enabled = false` is set explicitly so the policy passes. |
@@ -107,8 +109,7 @@ portfolio's single-digit-dollar ceiling.
 
 ## Honest gaps
 
-- **Not deployed yet.** Everything above is written and passes static checks;
-  the drill numbers come from running it.
+- **Drill numbers** come from running the drill; see the run log in the PR.
 - **No hub egress inspection for the portal.** The portal VNets are not peered
   to the hub or routed through Azure Firewall; Container Apps forced egress
   needs its own firewall allowlist, a follow-up.
