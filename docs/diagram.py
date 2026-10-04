@@ -11,13 +11,16 @@ from diagrams.azure.network import (
 from diagrams.azure.security import KeyVaults, SecurityCenter
 from diagrams.azure.analytics import LogAnalyticsWorkspaces
 from diagrams.azure.identity import ActiveDirectory
+from diagrams.azure.managementgovernance import Alerts, Policy
 from diagrams.onprem.network import Internet
 from diagrams.onprem.iac import Terraform
 from diagrams.custom import Custom
 
 # The mingrammer library has no Azure Bastion node, so use the official Azure
 # Bastion service icon (docs/icons/azure-bastion.png) as a custom node.
-BASTION_ICON = "docs/icons/azure-bastion.png"
+import os
+
+BASTION_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "azure-bastion.png")
 
 graph_attrs = {"fontsize": "13", "bgcolor": "white", "pad": "0.5", "splines": "ortho"}
 node_attrs = {"fontsize": "11"}
@@ -34,7 +37,7 @@ with Diagram(
     tf = Terraform("Terraform\n(IaC)")
     inet = Internet("Internet")
 
-    with Cluster("Management Group Hierarchy  ·  CIS initiative + Deny policies (inherited)"):
+    with Cluster("Management Group Hierarchy  ·  CIS + HITRUST/HIPAA scoring  ·  Deny policies (inherited)"):
         mg_root = Managementgroups("jordann6\n(root)")
         mg_platform = Managementgroups("Platform")
         mg_workloads = Managementgroups("Workloads")
@@ -44,6 +47,7 @@ with Diagram(
             mg_test = Managementgroups("Test")
             mg_prod = Managementgroups("Prod\n(stricter)")
         sub = Subscriptions("Subscription\n(single-sub demo)")
+        policy = Policy("Deny: public IP, regions,\nrequired tags, data_classification,\nphi = no public network")
 
         mg_root >> [mg_platform, mg_workloads, mg_sandbox]
         mg_workloads >> [mg_dev, mg_test, mg_prod]
@@ -64,7 +68,8 @@ with Diagram(
 
     with Cluster("Platform services"):
         law = LogAnalyticsWorkspaces("Log Analytics\n(central)")
-        defender = SecurityCenter("Defender for Cloud\n(CIS assessment)")
+        defender = SecurityCenter("Defender for Cloud\n(CIS + HIPAA assessments)")
+        alerts = Alerts("Alerts -> ops action group\npolicy deny, KV 403,\nfirewall deny spike")
         kv = KeyVaults("Key Vault + CMK\n(rotation, purge protection)")
 
     with Cluster("Spoke landing zones (peered to hub, default-deny NSG)"):
@@ -91,6 +96,9 @@ with Diagram(
     pe >> dns
 
     # Telemetry + CMK wiring.
-    hub >> Edge(label="diagnostics", style="dotted") >> law
+    hub >> Edge(style="dotted") >> law
+    fw >> Edge(style="dotted") >> law
+    law >> Edge(style="dotted") >> alerts
+    policy >> Edge(style="dotted") >> mg_workloads
     kv >> Edge(label="audit logs", style="dotted") >> law
     defender >> Edge(style="dotted") >> mg_root
