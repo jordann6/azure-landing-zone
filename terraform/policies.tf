@@ -74,6 +74,13 @@ resource "azurerm_policy_definition" "allowed_locations" {
           field     = "location"
           notEquals = "global"
         },
+        # An Entra External ID tenant's "location" is a data-residency
+        # geography ("United States"), not an Azure region, so it can never
+        # match the region list. Residency is pinned to the US in portal/.
+        {
+          field     = "type"
+          notEquals = "Microsoft.AzureActiveDirectory/ciamDirectories"
+        },
         {
           not = {
             field = "location"
@@ -128,11 +135,24 @@ resource "azurerm_policy_definition" "require_tag" {
 
 # ── Assignments at the Workloads MG (inherited by Dev / Test / Prod) ──────────
 
+# Platform-managed resource groups (for example the infrastructure RG a Container
+# Apps environment creates for itself) are created by the service, not by a
+# person, and do not carry our tags. They are named explicitly in
+# var.platform_managed_resource_groups and excluded from the tag rules only;
+# public IP, location, and phi policies still apply to them.
+locals {
+  platform_managed_rg_ids = [
+    for rg in var.platform_managed_resource_groups :
+    "${data.azurerm_subscription.current.id}/resourceGroups/${rg}"
+  ]
+}
+
 resource "azurerm_management_group_policy_assignment" "require_owner_tag" {
   name                 = "req-owner-tag"
   display_name         = "Require owner tag on resource groups"
   policy_definition_id = azurerm_policy_definition.require_owner_tag.id
   management_group_id  = azurerm_management_group.workloads.id
+  not_scopes           = local.platform_managed_rg_ids
 
   depends_on = [azurerm_management_group_subscription_association.workloads]
 }
@@ -186,6 +206,7 @@ resource "azurerm_management_group_policy_assignment" "require_tag" {
   display_name         = "Require ${each.key} tag on resource groups"
   policy_definition_id = azurerm_policy_definition.require_tag.id
   management_group_id  = azurerm_management_group.workloads.id
+  not_scopes           = local.platform_managed_rg_ids
 
   parameters = jsonencode({
     tagName = { value = each.key }

@@ -10,7 +10,7 @@ variable "project" {
 
 variable "allowed_locations" {
   type        = list(string)
-  default     = ["centralus", "eastus2", "global"]
+  default     = ["centralus", "eastus2", "westus2", "global"]
   description = "Regions the allowed-locations Deny policy permits."
 }
 
@@ -31,6 +31,12 @@ variable "firewall_deny_alert_threshold" {
   type        = number
   default     = 50
   description = "Firewall denies per 15 minutes above which the deny-spike alert fires."
+}
+
+variable "platform_managed_resource_groups" {
+  type        = list(string)
+  default     = ["rg-alz-portal-cus-aca-infra", "rg-alz-portal-eus2-aca-infra"]
+  description = "Resource groups created by Azure services for their own infrastructure (Container Apps environments in portal/). Excluded from the tag-required policies only."
 }
 
 # --- Feature flags (default true in code; a gitignored terraform.tfvars turns

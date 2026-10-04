@@ -2,6 +2,8 @@
 *.tfstate
 *.tfstate.backup
 *.tfvars
+# Examples carry placeholder values only and are what the README tells you to copy.
+!example.tfvars
 override.tf
 override.tf.json
 *_override.tf

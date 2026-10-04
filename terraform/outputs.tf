@@ -70,3 +70,8 @@ output "fortigate_untrust_ip" {
   description = "Public IP on the FortiGate untrust interface (null when disabled)."
   value       = var.enable_fortigate ? azurerm_public_ip.fw_untrust[0].ip_address : null
 }
+
+output "ops_action_group_id" {
+  description = "Ops action group, so other roots (workload, portal) route their alerts to the same place."
+  value       = azurerm_monitor_action_group.ops.id
+}

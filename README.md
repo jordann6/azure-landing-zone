@@ -130,6 +130,18 @@ EKS cluster on the AWS side.
 Deploy it after the base (with the hourly firewall up): `make deploy-workload`, tear
 it down first with `make destroy-workload`.
 
+## Member portal (`portal/`)
+
+A second workload, shaped like the stack a member-services organization runs:
+**Front Door Premium with WAF** in front of **Container Apps in two regions**
+(internal, no public IP, reached over Private Link), **Azure SQL with a failover
+group** (private endpoints, Entra-only auth, phi-classified), **API Management**
+for partners, **Entra External ID** for member sign-in, a **Logic App**
+integration, and **Application Insights** with an availability test, a 99.9%
+SLO burn-rate alert, and an operations workbook. A drill script measures
+failover RTO and RPO instead of claiming them. Design, trade-offs, and runbook:
+[docs/portal.md](docs/portal.md).
+
 ## Deploy
 
 Credentialed applies run locally (`az login`), plan-before-apply. The deploy is two
@@ -234,6 +246,7 @@ without IDPS, software-protected key) are inline-skipped with reasons in the cod
 - [docs/accelerator-vs-bespoke.md](docs/accelerator-vs-bespoke.md): why bespoke modules over the ALZ accelerator.
 - [docs/hipaa-mapping.md](docs/hipaa-mapping.md): HIPAA 164.312 technical safeguards → Terraform resource, with honest gaps.
 - [docs/kql/](docs/kql/): saved investigation queries behind the alerts.
+- [docs/portal.md](docs/portal.md): member portal design, two-clock failover, trade-offs, deploy and drill runbook.
 
 ## Tech stack
 
