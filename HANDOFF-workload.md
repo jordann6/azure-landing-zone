@@ -75,8 +75,8 @@ AKS/PG/ACR/VNet/KV are all gone (workload compute/DB billing stopped).
 
 ## Environment facts
 
-- Subscription `00000000-0000-0000-0000-000000000000` (JordanDN6, personal tenant, Global Admin).
+- Personal subscription and tenant (IDs intentionally not recorded in the repo; see `az account show`).
 - Elevate access done (User Access Administrator at `/`). No Entra ID P2 → base `enable_pim = false`.
-- Workstation IP `203.0.113.4/32` in both tfvars.
+- Workstation public IP goes in `deployer_ip_cidrs` in both (gitignored) tfvars; it changes, so refresh it with `curl -4 ifconfig.me`.
 - Backend: `rg-tfbackend-jordprojs` / `sttfbejordprojs8557` / container `tfstate`. Base key
   `azure-landing-zone/dev.terraform.tfstate`, workload key `azure-landing-zone/workload.terraform.tfstate`. azurerm 3.117.1.

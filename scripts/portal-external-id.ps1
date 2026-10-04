@@ -59,11 +59,37 @@ if ($Teardown) {
         Invoke-MgGraphRequest -Method DELETE -Uri "v1.0/identity/authenticationEventsFlows/$($flow.id)"
         Write-Host "  deleted user flow $($flow.id)"
     }
-    if ($app) {
-        Remove-MgApplication -ApplicationId $app.Id
-        Write-Host "  deleted app registration $($app.AppId)"
+    # A tenant refuses deletion while it holds ANY application or tenant-owned
+    # service principal, including recycle-bin copies (kept 30 days) and the
+    # hidden b2c-extensions-app every External ID tenant creates for itself.
+    # Learned on the first teardown (AADB2C95060: ActiveApplicationObject, then
+    # ActiveServicePrincipal). Delete everything the tenant owns, then purge.
+    foreach ($a in Get-MgApplication -All) {
+        Remove-MgApplication -ApplicationId $a.Id
+        Write-Host "  deleted app $($a.DisplayName)"
     }
-    Write-Host 'Done. Terraform can now destroy the External ID tenant.'
+    # Every deletable service principal, not just tenant-owned ones: the
+    # blockers on the first teardown were "Microsoft Graph Command Line Tools"
+    # (created by this script's own Connect-MgGraph sign-in) and "CPIM
+    # Service". Microsoft-internal principals refuse deletion and are fine to
+    # leave; the tenant deletes with them present.
+    foreach ($sp in Get-MgServicePrincipal -All -Property Id,DisplayName) {
+        try {
+            Remove-MgServicePrincipal -ServicePrincipalId $sp.Id -ErrorAction Stop
+            Write-Host "  deleted service principal $($sp.DisplayName)"
+        } catch {
+            if ($_.Exception.Message -notmatch 'Microsoft Internal') { throw }
+        }
+    }
+    Start-Sleep -Seconds 5
+    foreach ($type in 'application', 'servicePrincipal') {
+        foreach ($d in (Invoke-MgGraphRequest -Method GET -Uri "v1.0/directory/deletedItems/microsoft.graph.$type").value) {
+            Invoke-MgGraphRequest -Method DELETE -Uri "v1.0/directory/deletedItems/$($d.id)"
+            Write-Host "  purged $type $($d.displayName)"
+        }
+    }
+    Write-Host 'Done. Run the Terraform destroy now, before signing in to this tenant again'
+    Write-Host '(a new Graph sign-in recreates the Graph Command Line Tools principal).'
     return
 }
 
