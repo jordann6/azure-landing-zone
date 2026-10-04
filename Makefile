@@ -19,9 +19,10 @@ validate: ## Terraform init (no backend) + validate, all three roots
 	terraform -chdir=portal init -backend=false && terraform -chdir=portal validate
 
 .PHONY: diagram
-diagram: ## Regenerate docs/architecture.png + docs/workload-architecture.png
+diagram: ## Regenerate docs/architecture.png, workload-architecture.png, portal-architecture.png
 	python3 docs/diagram.py
 	python3 docs/workload.py
+	python3 docs/portal.py
 
 # ---- deploy / test / destroy ----------------------------------------------
 # Two-step deploy so the free governance/identity/logging/Key Vault layer stands

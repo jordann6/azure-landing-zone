@@ -8,6 +8,8 @@ integration, and Application Insights. It inherits everything from the base:
 the management group policies, the central Log Analytics workspace, and the ops
 action group.
 
+![Member portal architecture](portal-architecture.png)
+
 ## The request path
 
 ```

@@ -105,6 +105,8 @@ Same design contract, three different control planes:
 
 ## Workload paved road (prod tier, `workload/`)
 
+![Workload paved road](docs/workload-architecture.png)
+
 A separate Terraform root (`workload/`, its own state) is the prod paved road, the
 hourly-billed layer that lands in the prod tier (`10.3`) and is deployed for a demo
 then destroyed on its own. It mirrors `aws-scp-governance/workload` (EKS to AKS),
@@ -131,6 +133,8 @@ Deploy it after the base (with the hourly firewall up): `make deploy-workload`, 
 it down first with `make destroy-workload`.
 
 ## Member portal (`portal/`)
+
+![Member portal](docs/portal-architecture.png)
 
 A second workload, shaped like the stack a member-services organization runs:
 **Front Door Premium with WAF** in front of **Container Apps in two regions**
