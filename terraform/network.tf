@@ -122,7 +122,7 @@ module "spoke_test" {
 
 # The prod tier (10.3.0.0/16) is owned by the separate workload root
 # (../workload), which stands up the prod VNet, private AKS, and data tier as the
-# hourly paved road and peers it to this hub, mirroring aws-scp-governance/workload.
+# hourly paved road and peers it to this hub, mirroring aws-landing-zone/workload.
 # The hub cannot peer to two overlapping 10.3 VNets, so the base does not vend a
 # prod spoke; the prod MG and its single-region policy still live here (governance).
 

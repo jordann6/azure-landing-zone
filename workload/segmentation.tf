@@ -1,6 +1,6 @@
 # Data-tier segmentation. Only the app tier (and the AKS node subnet) reaches the
 # database subnet, on the PostgreSQL port. Everything else is denied at the subnet
-# edge. Mirrors aws-scp-governance/workload/segmentation.tf (app/db security groups
+# edge. Mirrors aws-landing-zone/workload/segmentation.tf (app/db security groups
 # plus the data-subnet NACL). Cross-environment isolation is enforced above this by
 # the spoke VNets having no peering to each other and the hub not routing spoke to
 # spoke.

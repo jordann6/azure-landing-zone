@@ -10,7 +10,7 @@ ticket.
 But a governed foundation is only half the story. A paved road is only real if a
 workload can actually land on it and inherit the controls without hand-wiring
 each one. So this project is two layers that mirror the AWS side
-(`aws-scp-governance`): a **base landing zone** that establishes the governance a
+(`aws-landing-zone`): a **base landing zone** that establishes the governance a
 subscription inherits, and a **prod workload** (private AKS plus a managed
 database) that deploys onto it as the reference paved road.
 

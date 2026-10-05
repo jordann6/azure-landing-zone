@@ -2,7 +2,7 @@
 # that protect the paved road: the AKS etcd KMS key (envelope-encrypts Kubernetes
 # secrets), the node OS-disk key (via a disk encryption set), and the data key for
 # the PostgreSQL server and the container registry. Mirrors the separate data CMK
-# family in aws-scp-governance/workload/kms.tf; here one vault, several keys.
+# family in aws-landing-zone/workload/kms.tf; here one vault, several keys.
 
 resource "random_string" "kv" {
   length  = 6

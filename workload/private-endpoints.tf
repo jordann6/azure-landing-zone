@@ -2,7 +2,7 @@
 # the container registry and the Key Vault over Private Link, resolved by private
 # DNS zones linked to the prod VNet. This is what lets the cluster pull images and
 # the workload read secrets with no public path at all. Mirrors the interface
-# endpoints in aws-scp-governance/workload/endpoints.tf (ECR, secrets, etc.).
+# endpoints in aws-landing-zone/workload/endpoints.tf (ECR, secrets, etc.).
 
 locals {
   private_dns_zones = {

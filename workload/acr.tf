@@ -3,7 +3,7 @@
 # does not include Docker Hub, and the private VNet has no internet path, so a node
 # cannot reach one. Images arrive only through this registry (public images via the
 # cache rule, which mirrors them in where they are scanned). Mirrors
-# aws-scp-governance/workload/ecr.tf.
+# aws-landing-zone/workload/ecr.tf.
 
 resource "azurerm_user_assigned_identity" "acr" {
   name                = "id-${var.project}-acr"

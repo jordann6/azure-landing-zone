@@ -18,7 +18,7 @@ terraform {
 
   # Its own state. This is the paved-road prod workload (data tier + AKS): the
   # hourly-billed layer, deployed for a demo and destroyed on its own. Mirrors the
-  # separate workload root in aws-scp-governance/workload.
+  # separate workload root in aws-landing-zone/workload.
   backend "azurerm" {
     resource_group_name  = "rg-tfbackend-jordprojs"
     storage_account_name = "sttfbejordprojs8557"

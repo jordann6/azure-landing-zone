@@ -1,5 +1,5 @@
 # AKS as the paved-road cluster. The load-bearing controls mirror the AWS EKS in
-# aws-scp-governance/workload/eks.tf: a private API server (no public control
+# aws-landing-zone/workload/eks.tf: a private API server (no public control
 # plane), CMK envelope encryption of Kubernetes secrets in etcd (Key Vault KMS),
 # and an OIDC issuer + workload identity so pods get scoped Entra identities instead
 # of node credentials or static keys. Egress leaves only through the hub firewall

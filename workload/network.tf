@@ -1,7 +1,7 @@
 # Prod workload VNet (10.3.0.0/16). Fully private: no public IP, no NAT gateway.
 # All egress leaves through the hub Azure Firewall via a user-defined route, so
 # this VNet inherits the centralized inspection and has no independent path to the
-# internet. Mirrors aws-scp-governance/workload/vpc.tf (prod VPC, no IGW/NAT, all
+# internet. Mirrors aws-landing-zone/workload/vpc.tf (prod VPC, no IGW/NAT, all
 # egress through the TGW to the hub firewall).
 
 resource "azurerm_resource_group" "prod" {

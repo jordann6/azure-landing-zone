@@ -109,7 +109,7 @@ Same design contract, three different control planes:
 
 A separate Terraform root (`workload/`, its own state) is the prod paved road, the
 hourly-billed layer that lands in the prod tier (`10.3`) and is deployed for a demo
-then destroyed on its own. It mirrors `aws-scp-governance/workload` (EKS to AKS),
+then destroyed on its own. It mirrors `aws-landing-zone/workload` (EKS to AKS),
 reading the base landing zone over remote state (the hub VNet, the firewall private
 IP, the Log Analytics workspace) and peering the prod VNet to the hub.
 

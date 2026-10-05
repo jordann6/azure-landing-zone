@@ -2,7 +2,7 @@
 # this Entra identity through the cluster OIDC issuer, scoped by Kubernetes service
 # account, and can read only the PostgreSQL admin secret from the workload Key
 # Vault. No static kubeconfig, no node-wide credentials: the pod gets exactly one
-# secret. Mirrors aws-scp-governance/workload/irsa.tf (ESO via IRSA over OIDC).
+# secret. Mirrors aws-landing-zone/workload/irsa.tf (ESO via IRSA over OIDC).
 
 resource "azurerm_user_assigned_identity" "eso" {
   name                = "id-${var.project}-external-secrets"
