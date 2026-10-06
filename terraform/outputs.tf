@@ -16,6 +16,21 @@ output "hub_vnet_id" {
   value       = azurerm_virtual_network.hub.id
 }
 
+output "compute_gallery" {
+  description = "Golden-image destination and private management subnet."
+  value = {
+    id                   = azurerm_shared_image_gallery.hardened.id
+    name                 = azurerm_shared_image_gallery.hardened.name
+    resource_group_name  = azurerm_resource_group.images.name
+    image_id             = azurerm_shared_image.ubuntu.id
+    image_name           = azurerm_shared_image.ubuntu.name
+    location             = var.location
+    subscription_id      = data.azurerm_client_config.current.subscription_id
+    management_subnet_id = azurerm_subnet.management.id
+    project              = var.project
+  }
+}
+
 output "spoke_vnet_ids" {
   description = "Spoke VNet resource IDs by tier"
   value = {

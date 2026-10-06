@@ -9,7 +9,7 @@ set -uo pipefail
 
 PROJECT="${PROJECT:-alz}"
 LOCATION="${LOCATION:-centralus}"
-BAD_LOCATION="${BAD_LOCATION:-westus2}"
+BAD_LOCATION="${BAD_LOCATION:-australiaeast}"
 RG_TEST="rg-${PROJECT}-guardrail-test"
 # The CIS initiative is assigned at the root management group; a subscription-scope
 # policy-assignment list does not surface MG-scoped assignments, so query the MG.
@@ -31,7 +31,7 @@ echo "== Guardrail proofs =="
 # than tripping the tag policies.
 az group create -n "$RG_TEST" -l "$LOCATION" \
   --tags owner=guardrail-test cost_center=platform environment=test data_classification=internal \
-  >/dev/null 2>&1
+  >/dev/null || exit 1
 
 echo "-- deny public IP --"
 out=$(az network public-ip create -g "$RG_TEST" -n "pip-should-fail" -l "$LOCATION" 2>&1)
@@ -99,6 +99,24 @@ fi
 
 # Cleanup the compliant test RG.
 az group delete -n "$RG_TEST" -y --no-wait >/dev/null 2>&1
+
+echo "== Compute assignments =="
+for assignment in approved-vm-images allowed-vm-sizes require-host-encryption \
+  guest-config-prereqs linux-compute-baseline assess-linux-updates \
+  assess-windows-updates audit-update-assessment; do
+  if az policy assignment show --name "$assignment" \
+    --scope "/providers/Microsoft.Management/managementGroups/${ROOT_MG}" >/dev/null; then
+    ok "$assignment is assigned"
+  else
+    bad "$assignment is missing or unreadable"
+  fi
+done
+
+if python3 "$(dirname "${BASH_SOURCE[0]}")/test-compute-policies.py"; then
+  ok "three independent compute denial proofs and compliant control"
+else
+  bad "compute denial proofs"
+fi
 
 echo ""
 echo "== $pass passed, $fail failed =="

@@ -1,0 +1,6 @@
+---
+roles:
+  - name: cis_baseline
+    src: https://github.com/jordann6/azure-vm-hardening.git
+    scm: git
+    version: v2.0.1

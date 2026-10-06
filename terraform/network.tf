@@ -17,7 +17,7 @@ resource "azurerm_virtual_network" "hub" {
   tags                = local.tags
 }
 
-# /26 — minimum size required by Azure Firewall
+# /26 , minimum size required by Azure Firewall
 resource "azurerm_subnet" "firewall" {
   name                 = "AzureFirewallSubnet"
   resource_group_name  = azurerm_resource_group.hub.name
@@ -25,7 +25,7 @@ resource "azurerm_subnet" "firewall" {
   address_prefixes     = ["10.0.0.0/26"]
 }
 
-# /27 — minimum size required by VPN / ExpressRoute Gateway
+# /27 , minimum size required by VPN / ExpressRoute Gateway
 resource "azurerm_subnet" "gateway" {
   name                 = "GatewaySubnet"
   resource_group_name  = azurerm_resource_group.hub.name
@@ -33,7 +33,7 @@ resource "azurerm_subnet" "gateway" {
   address_prefixes     = ["10.0.1.0/27"]
 }
 
-# /26 — minimum size required by Azure Bastion
+# /26 , minimum size required by Azure Bastion
 resource "azurerm_subnet" "bastion" {
   # checkov:skip=CKV2_AZURE_31:AzureBastionSubnet is managed by the Bastion
   # service, which requires its own fixed rule set; attaching a custom NSG
@@ -122,7 +122,7 @@ module "spoke_test" {
 
 # The prod tier (10.3.0.0/16) is owned by the separate workload root
 # (../workload), which stands up the prod VNet, private AKS, and data tier as the
-# hourly paved road and peers it to this hub, mirroring aws-scp-governance/workload.
+# hourly paved road and peers it to this hub, mirroring aws-landing-zone/workload.
 # The hub cannot peer to two overlapping 10.3 VNets, so the base does not vend a
 # prod spoke; the prod MG and its single-region policy still live here (governance).
 

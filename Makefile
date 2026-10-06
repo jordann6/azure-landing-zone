@@ -1,5 +1,5 @@
 TF ?= terraform
-CHEAP_FLAGS := -var enable_firewall=false -var enable_bastion=false -var enable_private_endpoints=false
+CHEAP_FLAGS := -var enable_firewall=false -var enable_bastion=false -var enable_private_endpoints=false -var enable_fortigate=false
 
 .PHONY: help
 help: ## Show this help
@@ -10,13 +10,17 @@ help: ## Show this help
 
 .PHONY: fmt
 fmt: ## Terraform format check
-	$(TF) -chdir=$(TF) fmt -check -recursive || terraform fmt -check -recursive terraform
+	terraform fmt -check -recursive terraform
+	terraform fmt -check -recursive workload
+	terraform fmt -check -recursive portal
+	terraform fmt -check -recursive compute
 
 .PHONY: validate
-validate: ## Terraform init (no backend) + validate, all three roots
+validate: ## Terraform init (no backend) + validate, all four roots
 	terraform -chdir=terraform init -backend=false && terraform -chdir=terraform validate
 	terraform -chdir=workload init -backend=false && terraform -chdir=workload validate
 	terraform -chdir=portal init -backend=false && terraform -chdir=portal validate
+	terraform -chdir=compute init -backend=false && terraform -chdir=compute validate
 
 .PHONY: diagram
 diagram: ## Regenerate docs/architecture.png, workload-architecture.png, portal-architecture.png
@@ -40,6 +44,30 @@ deploy: ## Stand up the FREE layer: MGs, Deny policies, CIS, identity, logging, 
 	@echo "==> Set deployer_ip_cidrs to your public IP so the CMK can be created."
 	terraform -chdir=terraform init
 	terraform -chdir=terraform apply $(CHEAP_FLAGS)
+
+# Run before any host-encrypted VM or AKS deployment:
+# ! az feature register --namespace Microsoft.Compute --name EncryptionAtHost
+# ! az provider register --namespace Microsoft.Compute
+.PHONY: compute-prereqs
+compute-prereqs: ## Register the host-encryption subscription feature (no hourly resources)
+	az feature register --namespace Microsoft.Compute --name EncryptionAtHost
+	az provider register --namespace Microsoft.Compute
+
+.PHONY: build-image
+build-image: ## Bake the pinned baseline into the gallery; always remove build exemptions
+	python3 scripts/build-image.py
+
+.PHONY: deploy-compute test-compute destroy-compute
+deploy-compute: ## Deploy only the private management VM from the gallery (hourly)
+	python3 scripts/deploy-compute.py
+
+test-compute: ## Prove the golden-image hardening on the live management VM
+	scripts/test-compute.sh
+
+destroy-compute: ## Destroy the management VM before its hub and gallery
+	terraform -chdir=compute init -input=false
+	terraform -chdir=compute plan -destroy -out=tfplan -input=false
+	terraform -chdir=compute apply -input=false tfplan
 
 .PHONY: deploy-network
 deploy-network: ## Add the HOURLY layer: Azure Firewall + forced-egress UDR + Bastion + private endpoints
@@ -77,13 +105,9 @@ test: ## Prove the guardrails actually deny, not just that apply succeeded
 
 .PHONY: destroy-workload
 destroy-workload: ## Tear down the prod workload paved road (AKS, PostgreSQL, ACR, backup) before the base
-	@echo "==> A geo-redundant Backup vault with recovery points can block deletion until soft-delete clears; empty it then re-run."
+	@echo "==> A protected Backup vault can block deletion until retention clears; preserve recovery data and retry afterward."
 	terraform -chdir=workload destroy
 
 .PHONY: destroy
-destroy: ## Tear everything down (workload first), then verify nothing hourly survives
-	@echo "==> Destroy the prod workload first if it is up: make destroy-workload"
-	@echo "==> Azure Firewall and any Gateway take 10-30 min to delete; the RG goes last."
-	terraform -chdir=terraform destroy
-	@echo "==> Verifying teardown"
-	scripts/verify-teardown.sh
+destroy: ## Tear down compute, workload and base, then verify even after a failure
+	scripts/destroy-session.sh

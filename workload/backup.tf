@@ -1,7 +1,7 @@
 # Azure Backup with soft delete and geo-redundant storage, protecting the Postgres
 # server. Soft delete makes a deleted backup recoverable within the retention window
 # (tamper-resistance), and geo-redundancy gives the cross-region copy. Mirrors
-# aws-scp-governance/workload/backup.tf (Vault Lock WORM plus a cross-region DR copy).
+# aws-landing-zone/workload/backup.tf (Vault Lock WORM plus a cross-region DR copy).
 #
 # Vault immutability (the Locked-WORM equivalent of AWS Vault Lock) is the
 # production upgrade: it is exposed by azurerm v4 (this repo is pinned to azurerm

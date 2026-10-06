@@ -53,3 +53,17 @@ blocked at create time rather than only flagged after the fact:
   (`enable_defender_standard`).
 - **Single subscription**: the tiers are management groups + resource groups, not
   a subscription per tier. See `access-model.md`.
+
+## Compute baseline additions
+
+These controls are configured; live image and VM proofs are recorded separately
+in the compute handoff after execution.
+
+| Compute control | Implementation | Evidence |
+|---|---|---|
+| Approved standalone VM images | Root-MG Deny accepts only the landing-zone gallery; VMSS excluded | `terraform/compute.tf`, attributable stock-image denial |
+| VM size restriction | Built-in allowed SKU Deny | `terraform/compute.tf`, attributable SKU denial |
+| Host encryption | Built-in Deny for VMs/VMSS, AKS pool encryption enabled | `terraform/compute.tf`, `workload/aks.tf`, attributable encryption denial |
+| Guest configuration | Prerequisite initiative with remediation identity; Linux baseline AuditIfNotExists | Assignment checks, followed by live guest validation |
+| Missing update assessment | Modify for both OS types; matching Audit policy | Assignment checks; VM update settings in the compute root |
+| AKS node servicing | SecurityPatch OS channel, patch Kubernetes channel, weekly off-hours window | Static provider validation only; AKS is not deployed for this session |

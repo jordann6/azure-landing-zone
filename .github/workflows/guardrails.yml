@@ -44,6 +44,12 @@ jobs:
       terraform_dir: portal
       skip_policy: true
 
+  static-compute:
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    with:
+      terraform_dir: compute
+      skip_policy: true
+
   # The portal app's unit tests (no database or Azure needed).
   app-tests:
     runs-on: ubuntu-latest

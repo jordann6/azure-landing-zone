@@ -109,7 +109,7 @@ Same design contract, three different control planes:
 
 A separate Terraform root (`workload/`, its own state) is the prod paved road, the
 hourly-billed layer that lands in the prod tier (`10.3`) and is deployed for a demo
-then destroyed on its own. It mirrors `aws-scp-governance/workload` (EKS to AKS),
+then destroyed on its own. It mirrors `aws-landing-zone/workload` (EKS to AKS),
 reading the base landing zone over remote state (the hub VNet, the firewall private
 IP, the Log Analytics workspace) and peering the prod VNet to the hub.
 
@@ -260,3 +260,100 @@ without IDPS, software-protected key) are inline-skipped with reasons in the cod
 - **Log Analytics + Azure Monitor alerts + Defender for Cloud**, **Key Vault + CMK rotation**
 - **Entra ID** persona groups + MG-scope RBAC + PIM
 - Reusable `landing-zone` spoke-vending module
+
+## Compute baseline
+
+The root management group denies standalone VMs outside this landing zone's
+Compute Gallery, disallowed VM sizes, and VMs or VM scale sets without host
+encryption. VM scale sets keep their managed images so AKS uses its supported
+node OS. Machine Configuration prerequisites and Linux baseline auditing are
+assigned alongside periodic update assessment for both Linux and Windows.
+These policy assignments add no hourly compute or network resources.
+
+AKS retains Ubuntu nodes and the existing Kubernetes patch channel, adds the
+SecurityPatch node OS channel, host encryption, and a four-hour Sunday window
+at 02:00 UTC-06:00 (fixed offset). These node changes are validated statically;
+the compute baseline session does not deploy AKS or PostgreSQL.
+
+The image pipeline and private management VM passed live proof on 2026-10-05.
+The corrected image passed 28 guest hardening checks after a reboot, then a
+new private management VM passed the same checks through Azure Run Command.
+`make test` passed all 16 guardrail checks, including three isolated compute
+policy denials. The VM is the intended target for
+`azure-event-driven-remediation` and `azure-incident-responder`; runbook wiring
+is deferred. The VM belongs in a separate `compute/` state so it can be removed
+before the free base layer.
+
+`make test` includes a compliant gallery-image ARM validation and three isolated
+negative templates. Each must identify the expected assignment in a
+`RequestDisallowedByPolicy` response. If validation omits policy evaluation,
+the helper attempts creation and immediately cleans its dedicated proof resource
+group. It fails on unrelated API errors. These proofs require a built image;
+they are not claimed complete by Terraform validation alone.
+
+`verify-teardown.sh` fails on inventory errors and checks compute, network and
+workload resources, including management NICs/disks and image-build exemptions.
+Gallery image versions fail the check because their storage is billed.
+Protected backup vaults are reported explicitly.
+A pass does not claim a zero cloud invoice or an empty governance state.
+
+Before deploying host-encrypted compute, register the subscription feature:
+
+```sh
+az feature register --namespace Microsoft.Compute --name EncryptionAtHost
+az feature show --namespace Microsoft.Compute --name EncryptionAtHost --query properties.state -o tsv
+az provider register --namespace Microsoft.Compute
+```
+
+A workstation IP change requires updating the gitignored `deployer_ip_cidrs`
+input. If Key Vault key refresh is blocked, recover only the vault firewall with
+a targeted saved plan, review its single-rule diff, and apply that plan before
+running a full plan. Keep the default-deny firewall and existing RBAC.
+
+The pipeline publishes `hardened-ubuntu-2204` to the gallery using
+local release `azure-vm-hardening` tag `v2.0.1`. See
+[the build exemption ADR](docs/adr-compute-image-exemption.md) for the two timed
+bootstrap exemptions and local tag resolution. Nothing has been pushed.
+
+The `compute/` root creates a private `Standard_B2s` management VM with
+host encryption, Secure Boot, vTPM, SSH-key-only authentication, a system identity,
+policy-managed Machine Configuration prerequisites and weekly security patch schedule. Its disk
+uses platform-managed keys for this short-lived proof. Guest patching of a custom
+image uses a customer-managed schedule; setting AutomaticByPlatform alone does
+not enable automatic guest patching for custom images. See
+[Microsoft's custom-image guidance](https://learn.microsoft.com/en-us/azure/update-manager/manage-updates-customized-images).
+
+This demo relies on the management subnet's existing outbound access for the VM
+agent, Run Command and package repositories. No Azure Firewall, Bastion, NAT
+Gateway or workload deployment is part of the compute-only session. Outbound
+connectivity supported the live Run Command proof. The first VM exposed an
+Apport startup override of `fs.suid_dumpable`; release `v2.0.1` removes Apport
+and verifies the baseline after reboot before publishing an image. The corrected
+image and a fresh management VM both passed. This is a CIS-informed baseline,
+not a claim that every CIS benchmark control has been assessed.
+
+Cost reference checked 2026-10-05: Central US Linux B2s is $0.0499/hour from the
+Azure Retail Prices API. Budget up to $0.20/hour for the supervised build or
+management proof including disk, temporary build IP and small storage charges.
+Gallery definitions are free; published versions use billed storage. `make destroy`
+removes compute before workload and base and then runs verification. Never leave
+a bake or VM session unattended.
+
+Resume commands (run from a shell with working Azure access):
+
+```sh
+terraform -chdir=/Users/jordannelson/azure-landing-zone/terraform init -input=false
+terraform -chdir=/Users/jordannelson/azure-landing-zone/terraform plan -var=enable_firewall=false -var=enable_bastion=false -var=enable_private_endpoints=false -var=enable_fortigate=false -out=tfplan -input=false
+terraform -chdir=/Users/jordannelson/azure-landing-zone/terraform apply -input=false tfplan
+make -C /Users/jordannelson/azure-landing-zone build-image
+make -C /Users/jordannelson/azure-landing-zone test
+make -C /Users/jordannelson/azure-landing-zone deploy-compute
+make -C /Users/jordannelson/azure-landing-zone test-compute
+make -C /Users/jordannelson/azure-landing-zone destroy
+/Users/jordannelson/azure-landing-zone/scripts/verify-teardown.sh
+```
+
+Always run the last two commands even when a build or proof fails. The image
+build helper removes its own build group and exemptions on failure. The destroy
+helper deletes Packer-created gallery versions through the CLI after compute
+teardown, before Terraform removes their image definition and gallery.

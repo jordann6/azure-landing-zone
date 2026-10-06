@@ -18,7 +18,7 @@ terraform {
 
   # Its own state. This is the paved-road prod workload (data tier + AKS): the
   # hourly-billed layer, deployed for a demo and destroyed on its own. Mirrors the
-  # separate workload root in aws-scp-governance/workload.
+  # separate workload root in aws-landing-zone/workload.
   backend "azurerm" {
     resource_group_name  = "rg-tfbackend-jordprojs"
     storage_account_name = "sttfbejordprojs8557"
@@ -57,10 +57,14 @@ data "terraform_remote_state" "base" {
 data "azurerm_client_config" "current" {}
 
 locals {
-  hub_vnet_id         = data.terraform_remote_state.base.outputs.hub_vnet_id
-  firewall_private_ip = data.terraform_remote_state.base.outputs.firewall_private_ip
-  fw_policy_id        = data.terraform_remote_state.base.outputs.firewall_policy_id
-  law_id              = data.terraform_remote_state.base.outputs.log_analytics_workspace_id
+  # A destroy can follow the base teardown. Keep absent outputs from blocking
+  # state cleanup for the retained backup-vault remnant.
+  hub_vnet_id         = try(data.terraform_remote_state.base.outputs.hub_vnet_id, "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/empty/providers/Microsoft.Network/virtualNetworks/empty")
+  firewall_private_ip = try(data.terraform_remote_state.base.outputs.firewall_private_ip, null)
+  # Syntactically valid absent-resource IDs let destroy validate empty roots.
+  # The route precondition still rejects deployment without a live Firewall.
+  fw_policy_id = coalesce(try(data.terraform_remote_state.base.outputs.firewall_policy_id, null), "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/empty/providers/Microsoft.Network/firewallPolicies/empty")
+  law_id       = coalesce(try(data.terraform_remote_state.base.outputs.log_analytics_workspace_id, null), "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/empty/providers/Microsoft.OperationalInsights/workspaces/empty")
 
   # hub_vnet_id: /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<name>
   hub_vnet_name = element(split("/", local.hub_vnet_id), length(split("/", local.hub_vnet_id)) - 1)

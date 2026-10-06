@@ -14,6 +14,32 @@ variable "allowed_locations" {
   description = "Regions the allowed-locations Deny policy permits."
 }
 
+variable "allowed_vm_skus" {
+  type        = list(string)
+  default     = ["Standard_B2s", "Standard_B2s_v2", "Standard_D2s_v3", "Standard_D2s_v5"]
+  description = "Permitted standalone VM sizes. Keep workload aks_node_vm_size in this list for consistent compute sizing."
+  validation {
+    condition     = length(var.allowed_vm_skus) > 0
+    error_message = "At least one approved VM size is required."
+  }
+}
+
+variable "enable_image_build" {
+  type        = bool
+  default     = false
+  description = "Create the temporary Packer resource group and scoped policy exemptions. Turn off after the build."
+}
+
+variable "image_build_exemption_expires_on" {
+  type        = string
+  default     = null
+  description = "Fixed UTC RFC3339 expiry, at most four hours ahead when enabling a build."
+  validation {
+    condition     = var.image_build_exemption_expires_on == null ? true : can(formatdate("YYYY", var.image_build_exemption_expires_on))
+    error_message = "Provide an RFC3339 UTC expiry."
+  }
+}
+
 # --- Governance / cost ---
 variable "budget_amount" {
   type        = number
