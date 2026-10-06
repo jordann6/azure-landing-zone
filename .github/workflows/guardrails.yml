@@ -30,8 +30,8 @@ jobs:
       # skipped rather than run against rules that do not apply here.
       skip_policy: true
 
-  # One static job per Terraform root: base (above), the prod workload, and the
-  # member portal. Same gates, same pin, same reason for skip_policy.
+  # One static job per Terraform root: base (above), the prod workload, the
+  # member portal, compute, and the state backend. Same gates, same pin, same reason for skip_policy.
   static-workload:
     uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
     with:
@@ -48,6 +48,12 @@ jobs:
     uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
     with:
       terraform_dir: compute
+      skip_policy: true
+
+  static-bootstrap:
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    with:
+      terraform_dir: bootstrap
       skip_policy: true
 
   # The portal app's unit tests (no database or Azure needed).

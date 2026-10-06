@@ -14,19 +14,33 @@ fmt: ## Terraform format check
 	terraform fmt -check -recursive workload
 	terraform fmt -check -recursive portal
 	terraform fmt -check -recursive compute
+	terraform fmt -check -recursive bootstrap
 
 .PHONY: validate
-validate: ## Terraform init (no backend) + validate, all four roots
+validate: ## Terraform init (no backend) + validate, all five roots
 	terraform -chdir=terraform init -backend=false && terraform -chdir=terraform validate
 	terraform -chdir=workload init -backend=false && terraform -chdir=workload validate
 	terraform -chdir=portal init -backend=false && terraform -chdir=portal validate
 	terraform -chdir=compute init -backend=false && terraform -chdir=compute validate
+	terraform -chdir=bootstrap init -backend=false && terraform -chdir=bootstrap validate
 
 .PHONY: diagram
 diagram: ## Regenerate docs/architecture.png, workload-architecture.png, portal-architecture.png
 	python3 docs/diagram.py
 	python3 docs/workload.py
 	python3 docs/portal.py
+
+# ---- state backend (standing, never part of destroy) -------------------------
+# bootstrap/ owns the storage account every root keeps state in. One-time move
+# off the shared backend: bootstrap-state, apply the saved plan, migrate-state.
+
+.PHONY: bootstrap-state
+bootstrap-state: ## Saved plan for the hardened state backend (first apply runs against the old backend)
+	scripts/migrate-state-backend.sh plan-bootstrap
+
+.PHONY: migrate-state
+migrate-state: ## Move every root's state into the new backend; fails on any resource-count mismatch
+	scripts/migrate-state-backend.sh migrate
 
 # ---- deploy / test / destroy ----------------------------------------------
 # Two-step deploy so the free governance/identity/logging/Key Vault layer stands

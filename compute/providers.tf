@@ -7,10 +7,11 @@ terraform {
     }
   }
   backend "azurerm" {
-    resource_group_name  = "rg-tfbackend-jordprojs"
-    storage_account_name = "sttfbejordprojs8557"
+    resource_group_name  = "rg-alz-tfstate"
+    storage_account_name = "stalztfstatejn"
     container_name       = "tfstate"
     key                  = "azure-landing-zone/compute.terraform.tfstate"
+    use_azuread_auth     = true
   }
 }
 
@@ -21,10 +22,11 @@ provider "azurerm" {
 data "terraform_remote_state" "base" {
   backend = "azurerm"
   config = {
-    resource_group_name  = "rg-tfbackend-jordprojs"
-    storage_account_name = "sttfbejordprojs8557"
+    resource_group_name  = "rg-alz-tfstate"
+    storage_account_name = "stalztfstatejn"
     container_name       = "tfstate"
     key                  = "azure-landing-zone/dev.terraform.tfstate"
+    use_azuread_auth     = true
   }
 }
 

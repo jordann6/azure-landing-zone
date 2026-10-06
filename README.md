@@ -146,6 +146,29 @@ SLO burn-rate alert, and an operations workbook. A drill script measures
 failover RTO and RPO instead of claiming them. Design, trade-offs, and runbook:
 [docs/portal.md](docs/portal.md).
 
+## State backend (`bootstrap/`)
+
+State lives in a backend this landing zone owns, created and hardened by
+`bootstrap/`, the one layer that stands between sessions. Why it moved off the
+shared account, and the trade-offs: [docs/adr-state-backend.md](docs/adr-state-backend.md).
+
+| Control | How it is met |
+|---|---|
+| Destruction protection | `prevent_destroy` on the account and vault, a `CanNotDelete` lock on `rg-alz-tfstate`, and `make destroy` never touches `bootstrap/` |
+| Versioning | Blob versioning plus 30-day blob and container soft delete |
+| Encryption | Customer-managed key in a dedicated vault, rotated every 90 days, plus infrastructure encryption |
+| Access and transport | HTTPS only, TLS 1.2, no public blobs, shared keys disabled (Entra ID + RBAC only) |
+| Locking | Native blob lease in the azurerm backend |
+
+One-time move off the old backend:
+
+```bash
+cp bootstrap/example.tfvars bootstrap/terraform.tfvars   # set deployer_ip_cidrs
+make bootstrap-state                                      # saved plan, against the old backend
+terraform -chdir=bootstrap apply bootstrap.tfplan
+make migrate-state                                        # copies each root, fails on a count mismatch
+```
+
 ## Deploy
 
 Credentialed applies run locally (`az login`), plan-before-apply. The deploy is two
@@ -197,7 +220,8 @@ Standard public IPs, VMs, private endpoints) is still alive.
 
 - **Standing after destroy**: ~$1/mo. The Key Vault CMK survives in a soft-deleted
   state (purge protection holds it for the soft-delete window) by design;
-  everything else is torn down.
+  everything else is torn down except the state backend (`bootstrap/`, under
+  $1/mo), which is meant to stand.
 - **Demo window** (flags on, ~2 hours): Azure Firewall Standard ~$1.25/hr, Bastion
   Basic ~$0.19/hr, private endpoints ~$0.01/hr each, Log Analytics ~free at demo
   volume. Roughly $3, under the portfolio's ~$7 ceiling.
@@ -250,11 +274,12 @@ without IDPS, software-protected key) are inline-skipped with reasons in the cod
 - [docs/accelerator-vs-bespoke.md](docs/accelerator-vs-bespoke.md): why bespoke modules over the ALZ accelerator.
 - [docs/hipaa-mapping.md](docs/hipaa-mapping.md): HIPAA 164.312 technical safeguards → Terraform resource, with honest gaps.
 - [docs/kql/](docs/kql/): saved investigation queries behind the alerts.
+- [docs/adr-state-backend.md](docs/adr-state-backend.md): why state moved to a dedicated, hardened backend.
 - [docs/portal.md](docs/portal.md): member portal design, two-clock failover, trade-offs, deploy and drill runbook.
 
 ## Tech stack
 
-- **Terraform** `>= 1.6`, `azurerm ~> 3.100`, `azuread ~> 2.50`, Azure Storage state backend
+- **Terraform** `>= 1.6`, `azurerm ~> 3.100`, `azuread ~> 2.50`, dedicated hardened Azure Storage state backend
 - **Azure Management Groups + Azure Policy** (Deny) + built-in CIS and HITRUST/HIPAA initiatives
 - **Azure Firewall + Bastion + UDR + Private Endpoints/DNS** hub-spoke inspection
 - **Log Analytics + Azure Monitor alerts + Defender for Cloud**, **Key Vault + CMK rotation**

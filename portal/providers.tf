@@ -23,10 +23,11 @@ terraform {
   # Its own state, like workload/. The member portal is an hourly-billed layer
   # deployed for a demo and destroyed on its own.
   backend "azurerm" {
-    resource_group_name  = "rg-tfbackend-jordprojs"
-    storage_account_name = "sttfbejordprojs8557"
+    resource_group_name  = "rg-alz-tfstate"
+    storage_account_name = "stalztfstatejn"
     container_name       = "tfstate"
     key                  = "azure-landing-zone/portal.terraform.tfstate"
+    use_azuread_auth     = true
   }
 }
 
@@ -45,10 +46,11 @@ provider "azapi" {}
 data "terraform_remote_state" "base" {
   backend = "azurerm"
   config = {
-    resource_group_name  = "rg-tfbackend-jordprojs"
-    storage_account_name = "sttfbejordprojs8557"
+    resource_group_name  = "rg-alz-tfstate"
+    storage_account_name = "stalztfstatejn"
     container_name       = "tfstate"
     key                  = "azure-landing-zone/dev.terraform.tfstate"
+    use_azuread_auth     = true
   }
 }
 
