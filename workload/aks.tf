@@ -72,7 +72,7 @@ resource "azurerm_kubernetes_cluster" "prod" {
   node_resource_group = "rg-${var.project}-prod-aks-nodes"
   tags                = local.tags
 
-  node_os_channel_upgrade = "SecurityPatch"
+  node_os_upgrade_channel = "SecurityPatch"
 
   maintenance_window_node_os {
     frequency   = "Weekly"
@@ -94,7 +94,7 @@ resource "azurerm_kubernetes_cluster" "prod" {
   workload_identity_enabled = true
   local_account_disabled    = true
   azure_policy_enabled      = true
-  automatic_channel_upgrade = "patch"
+  automatic_upgrade_channel = "patch"
 
   # Secrets Store CSI driver with autorotation, so the ESO/CSI secret path stays
   # in sync with Key Vault.
@@ -103,7 +103,7 @@ resource "azurerm_kubernetes_cluster" "prod" {
   }
 
   azure_active_directory_role_based_access_control {
-    managed            = true
+    tenant_id          = data.azurerm_client_config.current.tenant_id
     azure_rbac_enabled = true
   }
 
@@ -120,8 +120,8 @@ resource "azurerm_kubernetes_cluster" "prod" {
   # projected into the delegated api-server subnet so it can reach the etcd CMK over
   # the Key Vault private endpoint. Compatible with the private cluster.
   api_server_access_profile {
-    vnet_integration_enabled = true
-    subnet_id                = azurerm_subnet.apiserver.id
+    virtual_network_integration_enabled = true
+    subnet_id                           = azurerm_subnet.apiserver.id
   }
 
   # CMK for the node OS/data disks.
@@ -138,7 +138,7 @@ resource "azurerm_kubernetes_cluster" "prod" {
     node_count                   = var.aks_node_count
     vnet_subnet_id               = azurerm_subnet.aks.id
     os_sku                       = "Ubuntu"
-    enable_host_encryption       = true
+    host_encryption_enabled      = true
     only_critical_addons_enabled = false # single pool runs workloads, mirrors the AWS node group
     temporary_name_for_rotation  = "systmp"
 

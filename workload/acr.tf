@@ -38,7 +38,6 @@ resource "azurerm_container_registry" "app" {
   }
 
   encryption {
-    enabled            = true
     key_vault_key_id   = azurerm_key_vault_key.data.versionless_id
     identity_client_id = azurerm_user_assigned_identity.acr.client_id
   }
@@ -48,15 +47,10 @@ resource "azurerm_container_registry" "app" {
     default_action = "Deny"
   }
 
-  retention_policy {
-    days    = 14
-    enabled = true
-  }
+  retention_policy_in_days = 14
 
   # A tag cannot be moved to a different image once pushed.
-  trust_policy {
-    enabled = false
-  }
+  trust_policy_enabled = false
 
   depends_on = [azurerm_role_assignment.acr_kms]
 }

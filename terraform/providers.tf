@@ -4,7 +4,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.100"
+      version = "~> 4.0"
     }
     # Entra ID persona groups (identity.tf). Kept optional at apply time via the
     # create_entra_identity flag, but the provider is always declared so the
