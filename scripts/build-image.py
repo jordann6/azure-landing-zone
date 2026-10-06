@@ -73,7 +73,7 @@ def main():
         raise RuntimeError("Set exactly one workstation /32 in deployer_ip_cidrs before baking")
     with tempfile.TemporaryDirectory(prefix="alz-image-") as directory:
         directory = Path(directory)
-        # Local tag is used until an explicit push publishes the same release.
+        # Installs the published release tag from the local sibling checkout.
         requirements = directory / "requirements.yml"
         requirements.write_text(json.dumps({"roles": [{"name": "cis_baseline", "src": SOURCE.as_uri(),
                                                        "scm": "git", "version": release}]}))

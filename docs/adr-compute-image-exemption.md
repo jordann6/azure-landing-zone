@@ -30,7 +30,7 @@ Gallery and image definitions add no hourly VM charges. Image versions use bille
 storage until deleted. The timed bake uses one small VM, one managed disk and a
 public IP; publish the current cost estimate before starting it.
 
-The canonical role release is pinned in `ansible/requirements.yml`. During this
-local-only session, `HARDENING_REPO` supplies the sibling Git repository at the
-same tag, since publishing the tag is not authorized. The helper verifies the
-local tag exists and installs it through Ansible Galaxy's Git source support.
+The canonical role release is pinned in `ansible/requirements.yml` and the
+`v2.0.1` tag is published on GitHub. The build helper takes the same tag from
+the sibling Git repository that `HARDENING_REPO` supplies, verifies the tag
+exists locally, and installs it through Ansible Galaxy's Git source support.
