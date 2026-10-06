@@ -56,21 +56,21 @@ reusable `landing-zone` spoke module are in [access-model.md](docs/access-model.
 ## Parity with the AWS and GCP zones
 
 Status as of 2026-10-06. "Built" means code merged or committed. "Proven" means a
-deploy-test-destroy session passed. Where a cell says pending, nothing was run.
+deploy-test-destroy session passed. Where a cell says pending, nothing was run. AKS and ACR on azurerm 4.x are not proven (AKS create hit regional capacity errors on 2026-10-06).
 
 | Capability | AWS | Azure | GCP |
 |---|---|---|---|
 | Isolation boundary | Accounts per tier | One subscription, management groups and resource groups | Project per tier |
 | Preventive guardrails | SCPs, proven denials | Azure Policy Deny, proven denials | Org policy and custom constraints, proven denials |
 | Central audit log | Org trail, Object Lock | Activity log to Log Analytics | Org sinks to BigQuery and a log bucket |
-| Network flow logs | Built | Built behind `enable_flow_logs`, deploy pending | Built (subnet flow logging, 50% sampling) |
-| Observability layer | Own root, cross-account, retained | Own root, deploy pending, not retained (workspace lives in the base) | Sinks and CIS alert metrics in the base, ops layer queued |
+| Network flow logs | Built | Proven 2026-10-06 (hub and prod, CMK storage, Traffic Analytics), behind `enable_flow_logs` | Built (subnet flow logging, 50% sampling) |
+| Observability layer | Own root, cross-account, retained | Own root, proven 2026-10-06, not retained (workspace lives in the base) | Sinks and CIS alert metrics in the base, ops layer queued |
 | Findings routing | HIGH and CRITICAL to SNS | Defender export to the workspace, quiet on the free tier | SCC to Pub/Sub, off in the recorded deploy |
 | Threat detection | GuardDuty | Not enabled, see [ADR-0004](docs/adr/0004-detection-tier.md) | SCC, activation is manual |
 | Compute baseline | Guardrails live, compute proven 2026-10-06 | Image and VM proven 2026-10-05 | Code complete, live run pending |
 | Dedicated state backend | Built | Built | Built |
-| Secrets scanner | Live | None | None |
-| Warm standby | Not started | None | None |
+| Secrets scanner | Live | Identity, alert and positive control proven 2026-10-06 (metadata-only role, 403 on value read, NearExpiry alert); the Rails scanner itself is not run here | None |
+| Warm standby | Not started | Member portal only: two-region app and SQL failover group, planned failovers measured 2026-10-03. Prod LZ tier has in-region zone HA and geo-redundant backup only | None |
 
 The gaps that remain on the Azure side are the missing threat-detection service
 and the single-subscription boundary. Both are deliberate and written up, not

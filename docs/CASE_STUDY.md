@@ -115,8 +115,10 @@ churning every run.
 - **Observability is not a retained baseline.** Unlike the AWS root, it cannot
   outlive the base, because the workspace is destroyed with it.
 
-Flow logs and the observability root are built and statically checked but have not
-been deployed. The parity table in the README says which items are proven.
+Flow logs, the observability root and the secrets root were proven in a
+deploy-test-destroy session on 2026-10-06 (see the last section). AKS and ACR on
+azurerm 4.x were not: see "Not proven" below. The parity table in the README says
+which items are proven.
 
 ## Verification and teardown
 
@@ -149,3 +151,38 @@ This proves the implemented CIS-informed controls, not full benchmark compliance
 The supervised session excludes Firewall, Bastion, AKS, and PostgreSQL. Its
 teardown removes compute, Packer-created image storage, and the free base while
 preserving the existing backup vault's protected recovery data.
+
+## Parity gap-close proven live
+
+On 2026-10-06 the zone moved to azurerm 4.x and gained VNet flow logs, an
+observability root and a secrets root. A deploy-test-destroy session ran them
+against real Azure:
+
+- **Flow logs:** 9 of 9 checks pass. Hub and prod flow logs write to a
+  CMK-encrypted, default-Deny storage account through the trusted-service bypass,
+  and Traffic Analytics returned 190 `NTANetAnalytics` rows.
+- **Observability:** 4 of 4 checks pass. The change alerts exist and fire.
+- **Secrets:** 11 of 11 checks pass. The scanner identity holds Key Vault Reader,
+  `checkAccess` shows metadata `Allowed` and `getSecret` `NotAllowed`, a real
+  secret value read as a Reader principal returns 403, the seeded no-expiry secret
+  meets the finding criterion, and a NearExpiry audit event reached the workspace
+  and the alert fired. The 403 also triggered the forbidden-read alert, and that
+  email arrived, which proves the detection path end to end.
+- **Backup instance:** the azurerm resource returned 406 on create and delete, so
+  it is an `azapi` resource. Create and destroy both worked.
+- **Teardown:** `make destroy` then `verify-teardown.sh` passed. The backup vault
+  and soft-deleted Key Vaults remain by design.
+
+### Not proven
+
+- **AKS and ACR on azurerm 4.x.** AKS create failed six times with
+  `AKSCapacityHeavyUsage` (API Server VNet Integration unavailable in centralus),
+  an Azure regional capacity error, on a config that worked on 2026-09-27. Private
+  KMS needs VNet integration, so the config and region were left alone. The rename
+  proof waits for a later workload-only session.
+- The Expired variants of the secrets alert are matched by name and not observed.
+- **Warm standby is not an LZ-wide capability.** The member portal has a measured
+  two-region setup (Front Door shift 83.9 s, SQL failover group planned failover
+  RTO 7.3 s and RPO 0), but only planned failovers were drilled. The prod tier has
+  in-region zone-redundant HA and a geo-redundant backup vault, and a policy pins
+  Prod to one region.
