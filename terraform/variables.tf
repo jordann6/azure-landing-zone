@@ -49,8 +49,12 @@ variable "budget_amount" {
 
 variable "alert_email" {
   type        = string
-  default     = "you@example.com"
-  description = "Budget-alert recipient."
+  description = "Budget-alert recipient. No default, so no address is committed; set it in the gitignored terraform.tfvars."
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.alert_email))
+    error_message = "alert_email must be an email address."
+  }
 }
 
 variable "firewall_deny_alert_threshold" {
