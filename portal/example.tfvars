@@ -12,3 +12,6 @@ sql_secondary_location = "westus2"
 # external_id_client_id = "00000000-0000-0000-0000-000000000000"
 enable_apim        = true
 enable_external_id = true
+
+# APIM publisher email (required, no default).
+alert_email = "you@example.com"
