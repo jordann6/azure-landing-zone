@@ -44,7 +44,7 @@ resource "azurerm_security_center_automation" "export" {
   }
 
   action {
-    type        = "LogAnalytics"
+    type        = "Workspace"
     resource_id = local.law_id
   }
 
