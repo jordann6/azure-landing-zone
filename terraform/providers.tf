@@ -20,10 +20,11 @@ terraform {
   }
 
   backend "azurerm" {
-    resource_group_name  = "rg-tfbackend-jordprojs"
-    storage_account_name = "sttfbejordprojs8557"
+    resource_group_name  = "rg-alz-tfstate"
+    storage_account_name = "stalztfstatejn"
     container_name       = "tfstate"
     key                  = "azure-landing-zone/dev.terraform.tfstate"
+    use_azuread_auth     = true
   }
 }
 

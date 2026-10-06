@@ -48,6 +48,11 @@ def main():
                 survivors.append(f"billed gallery version: {gallery['name']}/{definition['name']}/{version['name']}")
     for item in resources:
         rg = item.get("resourceGroup", "").lower()
+        if rg == f"rg-{project}-tfstate":
+            # bootstrap/ is the one standing layer: it holds every root's state.
+            if item["type"].lower() == "microsoft.storage/storageaccounts":
+                print(f"  STANDING state backend: {item['name']} (bootstrap/, never destroyed)")
+            continue
         tags = item.get("tags") or {}
         if not (rg.startswith(prefix) or tags.get("project") == "azure-landing-zone"):
             continue

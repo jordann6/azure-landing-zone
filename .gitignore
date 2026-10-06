@@ -1,6 +1,8 @@
 .terraform/
 *.tfstate
 *.tfstate.backup
+*.tfplan
+tfplan
 *.tfvars
 # Examples carry placeholder values only and are what the README tells you to copy.
 !example.tfvars

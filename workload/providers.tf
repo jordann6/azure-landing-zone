@@ -20,10 +20,11 @@ terraform {
   # hourly-billed layer, deployed for a demo and destroyed on its own. Mirrors the
   # separate workload root in aws-landing-zone/workload.
   backend "azurerm" {
-    resource_group_name  = "rg-tfbackend-jordprojs"
-    storage_account_name = "sttfbejordprojs8557"
+    resource_group_name  = "rg-alz-tfstate"
+    storage_account_name = "stalztfstatejn"
     container_name       = "tfstate"
     key                  = "azure-landing-zone/workload.terraform.tfstate"
+    use_azuread_auth     = true
   }
 }
 
@@ -47,10 +48,11 @@ provider "azuread" {}
 data "terraform_remote_state" "base" {
   backend = "azurerm"
   config = {
-    resource_group_name  = "rg-tfbackend-jordprojs"
-    storage_account_name = "sttfbejordprojs8557"
+    resource_group_name  = "rg-alz-tfstate"
+    storage_account_name = "stalztfstatejn"
     container_name       = "tfstate"
     key                  = "azure-landing-zone/dev.terraform.tfstate"
+    use_azuread_auth     = true
   }
 }
 
