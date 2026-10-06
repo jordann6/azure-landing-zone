@@ -10,7 +10,7 @@ ticket.
 But a governed foundation is only half the story. A paved road is only real if a
 workload can actually land on it and inherit the controls without hand-wiring
 each one. So this project is two layers that mirror the AWS side
-(`aws-scp-governance`): a **base landing zone** that establishes the governance a
+(`aws-landing-zone`): a **base landing zone** that establishes the governance a
 subscription inherits, and a **prod workload** (private AKS plus a managed
 database) that deploys onto it as the reference paved road.
 
@@ -109,7 +109,29 @@ churning every run.
 Verified against real Azure through the control plane, not the plan file: private
 AKS nodes `Ready` with etcd KMS enabled over the KV private endpoint, PostgreSQL
 HA `Healthy` (primary zone 1 / standby zone 2), and the backup instance
-`ProtectionConfigured`. checkov runs clean (0 failed). Then destroyed clean, base
-and workload both, with residual limited to soft-deleted Key Vaults by design.
+`ProtectionConfigured`. These results cover the earlier workload demo. Compute
+and network resources were removed, but a protected backup vault remains during
+its recovery window alongside soft-deleted Key Vaults. This is not a zero-invoice
+claim.
 Deploy-demo-destroy keeps the reference reproducible for roughly the price of a
 couple of hours of runtime (~$2/hr while up) rather than a standing bill.
+
+## Compute baseline proven live
+
+The local compute changes add approved-gallery, VM-size, and host-encryption
+controls, guest baseline auditing, and periodic update assessment. AKS retains
+its managed Ubuntu image with SecurityPatch and weekly maintenance settings
+checked statically. A separate `compute/` root defines a private gallery-backed
+management VM and weekly security patches. Packer uses a dedicated build group
+and narrow, expiring bootstrap exemptions.
+
+On 2026-10-05, the Packer image passed 28 guest hardening checks after reboot.
+A new private management VM booted from that image passed all 28 checks through
+Azure Run Command. The 16-check guardrail suite passed, including three isolated
+denials for an unapproved image, forbidden size, and missing host encryption.
+The first VM had revealed that Apport resets `fs.suid_dumpable` during boot;
+the corrected role removes Apport and the image pipeline checks after reboot.
+This proves the implemented CIS-informed controls, not full benchmark compliance.
+The supervised session excludes Firewall, Bastion, AKS, and PostgreSQL. Its
+teardown removes compute, Packer-created image storage, and the free base while
+preserving the existing backup vault's protected recovery data.

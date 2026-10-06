@@ -1,5 +1,5 @@
 # AKS as the paved-road cluster. The load-bearing controls mirror the AWS EKS in
-# aws-scp-governance/workload/eks.tf: a private API server (no public control
+# aws-landing-zone/workload/eks.tf: a private API server (no public control
 # plane), CMK envelope encryption of Kubernetes secrets in etcd (Key Vault KMS),
 # and an OIDC issuer + workload identity so pods get scoped Entra identities instead
 # of node credentials or static keys. Egress leaves only through the hub firewall
@@ -62,7 +62,6 @@ resource "azurerm_kubernetes_cluster" "prod" {
   # checkov:skip=CKV_AZURE_170:Free tier (no uptime-SLA paid SKU) keeps the timed demo inside the cost ceiling; the paid SKU is the production upgrade.
   # checkov:skip=CKV_AZURE_232:Single node pool runs the workloads, mirroring the one AWS EKS managed node group; a dedicated system pool is the production split.
   # checkov:skip=CKV_AZURE_226:Node OS disks are CMK-encrypted via the disk encryption set; ephemeral OS disks are an unrelated performance option.
-  # checkov:skip=CKV_AZURE_227:Host-based encryption needs the EncryptionAtHost subscription feature registered; CMK disks cover the disk-encryption requirement here.
   # checkov:skip=CKV_AZURE_168:API-server authorized IP ranges do not apply to a private cluster (the control plane has no public endpoint).
   name                = "aks-${var.project}-prod"
   location            = azurerm_resource_group.prod.location
@@ -72,6 +71,17 @@ resource "azurerm_kubernetes_cluster" "prod" {
   # can be unsupported in a given region). Upgrades are handled by the patch channel.
   node_resource_group = "rg-${var.project}-prod-aks-nodes"
   tags                = local.tags
+
+  node_os_channel_upgrade = "SecurityPatch"
+
+  maintenance_window_node_os {
+    frequency   = "Weekly"
+    interval    = 1
+    duration    = 4
+    day_of_week = "Sunday"
+    start_time  = "02:00"
+    utc_offset  = "-06:00"
+  }
 
   # No public control plane; the API server is private and resolvable only over the
   # hub/spoke network. AKS manages the private DNS zone.
@@ -128,6 +138,7 @@ resource "azurerm_kubernetes_cluster" "prod" {
     node_count                   = var.aks_node_count
     vnet_subnet_id               = azurerm_subnet.aks.id
     os_sku                       = "Ubuntu"
+    enable_host_encryption       = true
     only_critical_addons_enabled = false # single pool runs workloads, mirrors the AWS node group
     temporary_name_for_rotation  = "systmp"
 

@@ -15,3 +15,8 @@ terraform/modules/**/.terraform.lock.hcl
 
 # macOS
 .DS_Store
+
+# local secrets: never commit
+.env
+.env.*
+!.env.example

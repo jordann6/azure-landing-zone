@@ -6,6 +6,9 @@
 location = "centralus"
 project  = "alz"
 
+# Compute policies are always assigned. Include the AKS node size if changing it.
+# allowed_vm_skus = ["Standard_B2s", "Standard_B2s_v2", "Standard_D2s_v3", "Standard_D2s_v5"]
+
 # --- Deployer access so the CMK can be created on first apply ---
 # The Key Vault firewall default-denies; add your workstation's public IP.
 # Find it with:  curl -s https://ifconfig.me

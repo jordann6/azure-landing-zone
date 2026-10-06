@@ -8,6 +8,7 @@ from diagrams.azure.network import (
     PrivateEndpoint,
     DNSPrivateZones,
 )
+from diagrams.azure.compute import SharedImageGalleries, VMLinux, ImageDefinitions
 from diagrams.azure.security import KeyVaults, SecurityCenter
 from diagrams.azure.analytics import LogAnalyticsWorkspaces
 from diagrams.azure.identity import ActiveDirectory
@@ -47,24 +48,30 @@ with Diagram(
             mg_test = Managementgroups("Test")
             mg_prod = Managementgroups("Prod\n(stricter)")
         sub = Subscriptions("Subscription\n(single-sub demo)")
-        policy = Policy("Deny: public IP, regions,\nrequired tags, data_classification,\nphi = no public network")
+        policy = Policy("Deny: public IP, regions,\nrequired tags, data_classification,\nphi = no public network,\nVM images/SKUs/host encryption")
 
         mg_root >> [mg_platform, mg_workloads, mg_sandbox]
         mg_workloads >> [mg_dev, mg_test, mg_prod]
 
     with Cluster("Identity (Entra ID)"):
-        aad = ActiveDirectory("7 persona groups\nRBAC @ MG scope + PIM JIT")
+        aad = ActiveDirectory("7 persona groups\nRBAC @ MG scope; PIM optional")
 
     with Cluster("Hub VNet  10.0.0.0/16  ·  centralus"):
         hub = VirtualNetworks("vnet-alz-hub")
         fw = Firewall("Azure Firewall\n(Standard, threat-intel Deny)")
         udr = RouteTables("UDR 0.0.0.0/0\n-> firewall")
-        bastion = Custom("Bastion\n(only admin path)", BASTION_ICON)
+        bastion = Custom("Bastion\n(optional browser admin)", BASTION_ICON)
         s_pl = Subnets("snet-privatelink")
+        mgmt = VMLinux("Management VM\n(private golden image; live proof)")
 
         with Cluster("Private access"):
             pe = PrivateEndpoint("KV private endpoint")
             dns = DNSPrivateZones("privatelink DNS zones")
+
+    with Cluster("Compute baseline (Packer + live Run Command proof)"):
+        packer = ImageDefinitions("Packer bake")
+        gallery = SharedImageGalleries("Approved Compute Gallery")
+        packer >> gallery >> mgmt
 
     with Cluster("Platform services"):
         law = LogAnalyticsWorkspaces("Log Analytics\n(central)")
