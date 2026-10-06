@@ -47,7 +47,7 @@ az network nsg delete -g "$RG_TEST" -n "nsg-should-alert" >/dev/null 2>&1
 
 fired() {
   az rest --method get \
-    --url "https://management.azure.com/subscriptions/${SUB}/providers/Microsoft.AlertsManagement/alerts?api-version=2019-05-05-preview&timeRange=1d&monitorService=Activity%20Log%20-%20Administrative" \
+    --url "https://management.azure.com/subscriptions/${SUB}/providers/Microsoft.AlertsManagement/alerts?api-version=2019-05-05-preview&timeRange=1d" \
     -o json 2>/dev/null \
     | jq -r --arg rule "alert-${PROJECT}-$1" --arg start "$start" \
       '[.value[] | select(.properties.essentials.alertRule | endswith($rule)) | select(.properties.essentials.startDateTime >= $start)] | length'
