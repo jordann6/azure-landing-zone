@@ -336,9 +336,12 @@ a targeted saved plan, review its single-rule diff, and apply that plan before
 running a full plan. Keep the default-deny firewall and existing RBAC.
 
 The pipeline publishes `hardened-ubuntu-2204` to the gallery using
-local release `azure-vm-hardening` tag `v2.0.1`. See
+`azure-vm-hardening` release
+[`v2.0.1`](https://github.com/jordann6/azure-vm-hardening/releases/tag/v2.0.1),
+pinned in `ansible/requirements.yml`. The tag is published on GitHub. The build
+helper installs the same tag from a local checkout and verifies it exists. See
 [the build exemption ADR](docs/adr-compute-image-exemption.md) for the two timed
-bootstrap exemptions and local tag resolution. Nothing has been pushed.
+bootstrap exemptions.
 
 The `compute/` root creates a private `Standard_B2s` management VM with
 host encryption, Secure Boot, vTPM, SSH-key-only authentication, a system identity,
