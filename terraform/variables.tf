@@ -96,6 +96,17 @@ variable "enable_defender_standard" {
   description = "Turn on paid Microsoft Defender for Cloud plans. Off by default: the free foundational CSPM already renders the CIS assessment. Paid plans bill per resource."
 }
 
+variable "defender_servers_subplan" {
+  type        = string
+  default     = "P1"
+  description = "Defender for Servers sub-plan used when enable_defender_standard is on. P1 is about $5 per server per month, P2 about $15 (see docs/adr/0004-detection-tier.md)."
+
+  validation {
+    condition     = contains(["P1", "P2"], var.defender_servers_subplan)
+    error_message = "defender_servers_subplan must be P1 or P2."
+  }
+}
+
 variable "enable_flow_logs" {
   type        = bool
   default     = false

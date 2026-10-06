@@ -62,10 +62,9 @@ Defender for Cloud is free for the first 30 days after a plan is enabled.
 - Enabling all four plans for a one-day demo costs a few dollars, mostly Storage by
   the hour across accounts. It is affordable for a single session, which is why the
   flag exists, but it would run up a bill if left on.
-- `azurerm_security_center_subscription_pricing` in `terraform/monitoring.tf` sets no
-  `subplan`, so the Servers plan tier that applies is whatever Azure defaults to. Pin
-  it explicitly (P1 or P2) before enabling the flag for a demo, so the bill is
-  predictable.
+- The Servers plan is pinned by `defender_servers_subplan` (default P1, the cheaper
+  tier). Set P2 deliberately if you want the extra Servers features. Azure applies the
+  subplan only to the `VirtualMachines` plan; the others take none.
 - Defender for Containers on the AKS cluster is covered separately in
   `azure-aks-runtime-security` and is not part of this flag.
 
