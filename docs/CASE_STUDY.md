@@ -104,6 +104,20 @@ the Postgres subnet, assigns HA zones, and applies a default node-pool
 `standby_availability_zone`, `upgrade_settings`) so plans stay clean instead of
 churning every run.
 
+## What it deliberately does not do
+
+- **One subscription.** The AWS zone isolates tiers with accounts and the GCP zone
+  with projects. With no EA or MCA to vend subscriptions, Azure uses management
+  groups and resource groups, so a subscription-level mistake reaches every tier.
+- **No threat-detection service.** Detection is the free Defender tier, change
+  alerts on every guardrail, and a full audit trail. Paid Defender plans and
+  Sentinel are costed and left off ([ADR-0004](adr/0004-detection-tier.md)).
+- **Observability is not a retained baseline.** Unlike the AWS root, it cannot
+  outlive the base, because the workspace is destroyed with it.
+
+Flow logs and the observability root are built and statically checked but have not
+been deployed. The parity table in the README says which items are proven.
+
 ## Verification and teardown
 
 Verified against real Azure through the control plane, not the plan file: private

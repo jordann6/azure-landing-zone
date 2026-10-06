@@ -50,7 +50,7 @@ blocked at create time rather than only flagged after the fact:
   Premium vault, out of the demo budget. Documented as the upgrade path.
 - **Defender paid plans**: off by default (they bill per resource). Free
   foundational CSPM covers the CIS assessment; paid plans are one flag away
-  (`enable_defender_standard`). See `adr-detection.md`.
+  (`enable_defender_standard`). See `docs/adr/0004-detection-tier.md`.
 - **Single subscription**: the tiers are management groups + resource groups, not
   a subscription per tier. See `access-model.md`.
 

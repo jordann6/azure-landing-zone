@@ -42,6 +42,40 @@ Same design contract, three different control planes:
 - **Identity/JIT**: **Entra ID groups + PIM**, where AWS uses **IAM Identity Center
   permission sets** and GCP uses **Cloud Identity + IAM Conditions**.
 
+## Single subscription by design
+
+The AWS zone has a management account plus eight member accounts (security,
+network, shared services, log archive, dev, test, prod and sandbox) and the GCP
+zone vends a project per tier. This zone has one subscription, because there is no EA or MCA to vend more.
+The tiers are management groups plus resource groups, and policy attaches to the
+management group the subscription sits under. What that costs is blast-radius
+isolation: a subscription-level mistake reaches every tier, where an account or
+project boundary would stop it. The intended subscription-per-tier layout and the
+reusable `landing-zone` spoke module are in [access-model.md](docs/access-model.md).
+
+## Parity with the AWS and GCP zones
+
+Status as of 2026-10-06. "Built" means code merged or committed. "Proven" means a
+deploy-test-destroy session passed. Where a cell says pending, nothing was run.
+
+| Capability | AWS | Azure | GCP |
+|---|---|---|---|
+| Isolation boundary | Accounts per tier | One subscription, management groups and resource groups | Project per tier |
+| Preventive guardrails | SCPs, proven denials | Azure Policy Deny, proven denials | Org policy and custom constraints, proven denials |
+| Central audit log | Org trail, Object Lock | Activity log to Log Analytics | Org sinks to BigQuery and a log bucket |
+| Network flow logs | Built | Built behind `enable_flow_logs`, deploy pending | Built (subnet flow logging, 50% sampling) |
+| Observability layer | Own root, cross-account, retained | Own root, deploy pending, not retained (workspace lives in the base) | Sinks and CIS alert metrics in the base, ops layer queued |
+| Findings routing | HIGH and CRITICAL to SNS | Defender export to the workspace, quiet on the free tier | SCC to Pub/Sub, off in the recorded deploy |
+| Threat detection | GuardDuty | Not enabled, see [ADR-0004](docs/adr/0004-detection-tier.md) | SCC, activation is manual |
+| Compute baseline | Guardrails live, compute proven 2026-10-06 | Image and VM proven 2026-10-05 | Code complete, live run pending |
+| Dedicated state backend | Built | Built | Built |
+| Secrets scanner | Live | None | None |
+| Warm standby | Not started | None | None |
+
+The gaps that remain on the Azure side are the missing threat-detection service
+and the single-subscription boundary. Both are deliberate and written up, not
+oversights.
+
 ## What gets built, by tier and pillar
 
 **Governance (free layer).**
@@ -159,7 +193,7 @@ failover RTO and RPO instead of claiming them. Design, trade-offs, and runbook:
 
 State lives in a backend this landing zone owns, created and hardened by
 `bootstrap/`, the one layer that stands between sessions. Why it moved off the
-shared account, and the trade-offs: [docs/adr-state-backend.md](docs/adr-state-backend.md).
+shared account, and the trade-offs: [docs/adr/0001-dedicated-state-backend.md](docs/adr/0001-dedicated-state-backend.md).
 
 | Control | How it is met |
 |---|---|
@@ -283,9 +317,7 @@ without IDPS, software-protected key) are inline-skipped with reasons in the cod
 - [docs/accelerator-vs-bespoke.md](docs/accelerator-vs-bespoke.md): why bespoke modules over the ALZ accelerator.
 - [docs/hipaa-mapping.md](docs/hipaa-mapping.md): HIPAA 164.312 technical safeguards → Terraform resource, with honest gaps.
 - [docs/kql/](docs/kql/): saved investigation queries behind the alerts.
-- [docs/adr-detection.md](docs/adr-detection.md): why detection stays on the free Defender tier, with the plan cost reference.
-- [docs/adr-azurerm-v4.md](docs/adr-azurerm-v4.md): the move to azurerm 4.x and what it changed.
-- [docs/adr-state-backend.md](docs/adr-state-backend.md): why state moved to a dedicated, hardened backend.
+- [docs/adr/](docs/adr/): decision records: state backend, compute image exemption, azurerm 4.x, detection tier.
 - [docs/portal.md](docs/portal.md): member portal design, two-clock failover, trade-offs, deploy and drill runbook.
 
 ## Tech stack
@@ -348,7 +380,7 @@ running a full plan. Keep the default-deny firewall and existing RBAC.
 
 The pipeline publishes `hardened-ubuntu-2204` to the gallery using
 local release `azure-vm-hardening` tag `v2.0.1`. See
-[the build exemption ADR](docs/adr-compute-image-exemption.md) for the two timed
+[the build exemption ADR](docs/adr/0002-compute-image-exemption.md) for the two timed
 bootstrap exemptions and local tag resolution. Nothing has been pushed.
 
 The `compute/` root creates a private `Standard_B2s` management VM with

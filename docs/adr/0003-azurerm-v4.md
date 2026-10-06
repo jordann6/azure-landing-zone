@@ -1,6 +1,7 @@
-# ADR: Move all roots to azurerm 4.x
+# ADR-0003: Move all roots to azurerm 4.x
 
-Status: accepted (code changed, live applies pending)
+- **Status:** accepted (code changed, live applies pending)
+- **Date:** 2026-10-06
 
 ## Context
 

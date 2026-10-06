@@ -1,6 +1,7 @@
-# ADR: time-limited Packer bootstrap exemptions
+# ADR-0002: Time-limited Packer bootstrap exemptions
 
-Status: accepted for the supervised compute baseline demo.
+- **Status:** accepted for the supervised compute baseline demo
+- **Date:** 2026-10-05
 
 Packer must boot a marketplace image before the hardening role can turn it into
 an approved gallery version. Its Azure builder also uses a temporary public IP

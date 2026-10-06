@@ -1,6 +1,7 @@
-# ADR: dedicated, hardened state backend
+# ADR-0001: Dedicated, hardened state backend
 
-Status: accepted, 2026-10-06.
+- **Status:** accepted
+- **Date:** 2026-10-06
 
 ## Context
 

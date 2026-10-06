@@ -2,7 +2,7 @@
 # Accepted and denied connections for the hub VNet, in the same workspace as
 # every other signal. NSG flow logs can no longer be created (Microsoft retired
 # them), so this targets the VNet itself, which also covers the firewall and
-# Bastion subnets that carry no NSG. Needs azurerm 4.x (adr-azurerm-v4.md).
+# Bastion subnets that carry no NSG. Needs azurerm 4.x (docs/adr/0003-azurerm-v4.md).
 #
 # One storage account holds the raw logs for the hub and, through the
 # flow_log_storage_account_id output, the prod VNet in workload/. Traffic

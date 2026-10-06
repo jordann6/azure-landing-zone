@@ -23,7 +23,7 @@ variable "deployer_ip_cidrs" {
 }
 
 variable "network_default_action" {
-  description = "Storage firewall default. Allow relies on Entra-only auth plus RBAC as the perimeter; Deny limits access to deployer_ip_cidrs (see docs/adr-state-backend.md)."
+  description = "Storage firewall default. Allow relies on Entra-only auth plus RBAC as the perimeter; Deny limits access to deployer_ip_cidrs (see docs/adr/0001-dedicated-state-backend.md)."
   type        = string
   default     = "Allow"
 

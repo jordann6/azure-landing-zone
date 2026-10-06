@@ -1,6 +1,7 @@
-# ADR: Threat detection on the free Defender tier, no Sentinel
+# ADR-0004: Threat detection on the free Defender tier, no Sentinel
 
-Status: accepted
+- **Status:** accepted
+- **Date:** 2026-10-06
 
 ## Context
 
