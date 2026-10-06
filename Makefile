@@ -15,14 +15,18 @@ fmt: ## Terraform format check
 	terraform fmt -check -recursive portal
 	terraform fmt -check -recursive compute
 	terraform fmt -check -recursive bootstrap
+	terraform fmt -check -recursive observability
+	terraform fmt -check -recursive secrets
 
 .PHONY: validate
-validate: ## Terraform init (no backend) + validate, all five roots
+validate: ## Terraform init (no backend) + validate, all seven roots
 	terraform -chdir=terraform init -backend=false && terraform -chdir=terraform validate
 	terraform -chdir=workload init -backend=false && terraform -chdir=workload validate
 	terraform -chdir=portal init -backend=false && terraform -chdir=portal validate
 	terraform -chdir=compute init -backend=false && terraform -chdir=compute validate
 	terraform -chdir=bootstrap init -backend=false && terraform -chdir=bootstrap validate
+	terraform -chdir=observability init -backend=false && terraform -chdir=observability validate
+	terraform -chdir=secrets init -backend=false && terraform -chdir=secrets validate
 
 .PHONY: diagram
 diagram: ## Regenerate docs/architecture.png, workload-architecture.png, portal-architecture.png
@@ -128,6 +132,18 @@ test-observability: ## Prove the change alerts exist and fire (creates and delet
 destroy-observability: ## Remove the change alerts and findings export before the base
 	terraform -chdir=observability init -input=false
 	terraform -chdir=observability destroy
+
+.PHONY: deploy-secrets test-secrets destroy-secrets
+deploy-secrets: ## Secrets scanner identity (Key Vault Reader, metadata only), near-expiry alert, positive-control secret (free; needs the base)
+	terraform -chdir=secrets init
+	terraform -chdir=secrets apply
+
+test-secrets: ## Prove metadata-only access, the seeded finding, the 403 on a value read, and the near-expiry alert
+	scripts/test-secrets.sh
+
+destroy-secrets: ## Remove the scanner identity, alert and control secret before the base
+	terraform -chdir=secrets init -input=false
+	terraform -chdir=secrets destroy
 
 .PHONY: test-flow-logs
 test-flow-logs: ## Prove VNet flow logs are configured and delivering (needs enable_flow_logs and time for analytics lag)

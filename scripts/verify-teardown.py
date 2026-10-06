@@ -63,6 +63,11 @@ def main():
         elif kind == "microsoft.storage/storageaccounts" and "flow" in item["name"].lower():
             # Flow-log storage bills by volume and is gated by enable_flow_logs.
             survivors.append(f"flow-log storage account: {item['name']}")
+        elif kind == "microsoft.managedidentity/userassignedidentities" and "secrets-scanner" in item["name"].lower():
+            # secrets/ root: a destroyed root leaves no scanner identity behind.
+            survivors.append(f"secrets scanner identity: {item['name']}")
+        elif kind == "microsoft.insights/scheduledqueryrules" and "secret-near-expiry" in item["name"].lower():
+            survivors.append(f"secrets near-expiry alert: {item['name']}")
         elif kind == "microsoft.compute/galleries/images/versions":
             survivors.append(f"billed gallery version: {item['name']}")
         elif kind == "microsoft.dataprotection/backupvaults":
@@ -72,6 +77,8 @@ def main():
     for group in groups:
         if group["name"].lower() == f"rg-{project}-image-build":
             survivors.append(f"image-build resource group: {group['name']}")
+        if group["name"].lower() == f"rg-{project}-secrets":
+            survivors.append(f"secrets resource group: {group['name']}")
     for exemption in exemptions:
         if f"/resourcegroups/{prefix}" in exemption["id"].lower():
             # No build exemption may remain after teardown, even before expiry.

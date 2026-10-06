@@ -56,6 +56,12 @@ jobs:
       terraform_dir: observability
       skip_policy: true
 
+  static-secrets:
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    with:
+      terraform_dir: secrets
+      skip_policy: true
+
   static-bootstrap:
     uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
     with:
