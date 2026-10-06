@@ -65,7 +65,7 @@ echo "$actions" | grep -Eq "secrets/getSecret/action|secrets/\*" && bad "role gr
 
 echo "-- effective access (checkAccess) for the scanner identity --"
 check=$(az rest --method post \
-  --url "https://management.azure.com${VAULT_ID}/providers/Microsoft.Authorization/checkAccess?api-version=2022-04-01" \
+  --url "https://management.azure.com${VAULT_ID}/providers/Microsoft.Authorization/checkAccess?api-version=2018-09-01-preview" \
   --body "{\"Subject\":{\"Attributes\":{\"ObjectId\":\"${PRINCIPAL}\"}},\"Actions\":[{\"Id\":\"Microsoft.KeyVault/vaults/secrets/readMetadata/action\",\"IsDataAction\":true},{\"Id\":\"Microsoft.KeyVault/vaults/secrets/getSecret/action\",\"IsDataAction\":true}],\"Resource\":{\"Id\":\"${VAULT_ID}\"}}" \
   -o json 2>/dev/null)
 meta=$(echo "$check" | jq -r '[(if type=="array" then . else .value end)[] | select(.actionId | endswith("readMetadata/action")) | .accessDecision] | first')
@@ -123,7 +123,7 @@ if az keyvault secret set --vault-name "$VAULT" --name "$NEAR" --value "not-a-re
   deadline=$((SECONDS + WAIT_MINUTES * 60))
   while [ "$SECONDS" -lt "$deadline" ]; do
     n=$(az monitor log-analytics query -w "$LAW" --analytics-query \
-      "AzureDiagnostics | where ResourceProvider == 'MICROSOFT.KEYVAULT' | where OperationName has 'NearExpiry' | where TimeGenerated >= datetime(${start}) | count" \
+      "AzureDiagnostics | where ResourceProvider == 'MICROSOFT.KEYVAULT' | where OperationName contains 'NearExpiry' | where TimeGenerated >= datetime(${start}) | count" \
       --query "[0].Count" -o tsv 2>/dev/null)
     [ "${n:-0}" -gt 0 ] && { seen=1; break; }
     sleep 60

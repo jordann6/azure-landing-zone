@@ -1,9 +1,10 @@
 # ── Secret age and near-expiry alert ─────────────────────────────────────────
-# Key Vault logs SecretNearExpiry, SecretExpired and the key and certificate
-# equivalents to AuditEvent, which the base routes to the central workspace.
+# Key Vault logs SecretNearExpiryEventGridNotification (observed live 2026-10-06)
+# to AuditEvent, which the base routes to the central workspace. The Expired
+# variants are matched by name and not yet observed.
 # This pages the ops action group when one appears, so an aging secret reaches a
-# person without anyone running the scanner. Unproven until a deploy: the exact
-# OperationName strings and the log delay are checked by test-secrets.sh.
+# person without anyone running the scanner. test-secrets.sh proves the event and
+# the alert end to end.
 
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "near_expiry" {
   count = var.near_expiry_alert_enabled ? 1 : 0
@@ -23,7 +24,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "near_expiry" {
     query                   = <<-KQL
       AzureDiagnostics
       | where ResourceProvider == "MICROSOFT.KEYVAULT"
-      | where OperationName in ("SecretNearExpiry", "SecretExpired", "KeyNearExpiry", "KeyExpired", "CertificateNearExpiry", "CertificateExpired")
+      | where OperationName contains "NearExpiry" or OperationName contains "ExpiredEventGrid"
     KQL
     time_aggregation_method = "Count"
     operator                = "GreaterThan"

@@ -10,8 +10,6 @@ set -uo pipefail
 PROJECT="${PROJECT:-alz}"
 LOCATION="${LOCATION:-centralus}"
 WAIT_MINUTES="${WAIT_MINUTES:-30}"
-NW_RG="NetworkWatcherRG"
-NW="NetworkWatcher_${LOCATION}"
 LAW="log-${PROJECT}-central"
 LAW_RG="rg-${PROJECT}-logging"
 pass=0
@@ -23,7 +21,7 @@ bad() { echo "  FAIL: $1"; fail=$((fail + 1)); }
 echo "== Flow log proofs =="
 
 echo "-- hub flow log is enabled and targets the VNet --"
-hub=$(az network watcher flow-log show -g "$NW_RG" --watcher-name "$NW" -n "fl-${PROJECT}-hub" -o json 2>/dev/null) \
+hub=$(az network watcher flow-log show --location "$LOCATION" --name "fl-${PROJECT}-hub" -o json 2>/dev/null) \
   || { echo "  FAIL: fl-${PROJECT}-hub not found (is enable_flow_logs on?)"; exit 1; }
 [ "$(jq -r '.enabled' <<<"$hub")" = "true" ] && ok "hub flow log enabled" || bad "hub flow log disabled"
 jq -r '.targetResourceId' <<<"$hub" | grep -qi '/virtualNetworks/' \
@@ -32,7 +30,7 @@ jq -r '.targetResourceId' <<<"$hub" | grep -qi '/virtualNetworks/' \
   && ok "traffic analytics enabled" || bad "traffic analytics disabled"
 
 echo "-- prod flow log (workload) --"
-if prod=$(az network watcher flow-log show -g "$NW_RG" --watcher-name "$NW" -n "fl-${PROJECT}-prod" -o json 2>/dev/null); then
+if prod=$(az network watcher flow-log show --location "$LOCATION" --name "fl-${PROJECT}-prod" -o json 2>/dev/null); then
   [ "$(jq -r '.enabled' <<<"$prod")" = "true" ] && ok "prod flow log enabled" || bad "prod flow log disabled"
 else
   echo "  SKIP: fl-${PROJECT}-prod not found (workload not deployed or flow logs off there)"
