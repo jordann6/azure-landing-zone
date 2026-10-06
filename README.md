@@ -90,6 +90,15 @@ Same design contract, three different control planes:
 - **Alerting** through one action group: any Deny policy event, any Key Vault 403,
   and a firewall deny spike (`terraform/alerts.tf`). The matching investigation
   queries are saved in [docs/kql/](docs/kql/).
+- **Observability root** (`observability/`, its own state, applied after the base):
+  13 control-plane change alerts (policy assignment, NSG and rule, firewall policy,
+  security solution, role assignment, Key Vault delete; the CIS 5.2.x set plus a few
+  more) and Defender for Cloud continuous export of High alerts and assessments into
+  the central workspace, with an alert on High findings. The free CSPM tier produces
+  recommendations only, so the High-alert path stays quiet until a paid Defender plan
+  is on. `make deploy-observability`, then `make test-observability`.
+- **VNet flow logs** for the hub and prod VNets with traffic analytics, behind
+  `enable_flow_logs` (`terraform/flow-logs.tf`). `make test-flow-logs`.
 - **Key Vault** with purge protection + soft delete + default-Deny network ACL, and
   a **CMK with a rotation policy** (`terraform/keyvault.tf`).
 - A monthly **budget** with actual + forecast alerts (`terraform/budgets.tf`).
@@ -274,12 +283,13 @@ without IDPS, software-protected key) are inline-skipped with reasons in the cod
 - [docs/accelerator-vs-bespoke.md](docs/accelerator-vs-bespoke.md): why bespoke modules over the ALZ accelerator.
 - [docs/hipaa-mapping.md](docs/hipaa-mapping.md): HIPAA 164.312 technical safeguards → Terraform resource, with honest gaps.
 - [docs/kql/](docs/kql/): saved investigation queries behind the alerts.
+- [docs/adr-azurerm-v4.md](docs/adr-azurerm-v4.md): the move to azurerm 4.x and what it changed.
 - [docs/adr-state-backend.md](docs/adr-state-backend.md): why state moved to a dedicated, hardened backend.
 - [docs/portal.md](docs/portal.md): member portal design, two-clock failover, trade-offs, deploy and drill runbook.
 
 ## Tech stack
 
-- **Terraform** `>= 1.6`, `azurerm ~> 3.100`, `azuread ~> 2.50`, dedicated hardened Azure Storage state backend
+- **Terraform** `>= 1.6`, `azurerm ~> 4.0`, `azuread ~> 2.50`, dedicated hardened Azure Storage state backend
 - **Azure Management Groups + Azure Policy** (Deny) + built-in CIS and HITRUST/HIPAA initiatives
 - **Azure Firewall + Bastion + UDR + Private Endpoints/DNS** hub-spoke inspection
 - **Log Analytics + Azure Monitor alerts + Defender for Cloud**, **Key Vault + CMK rotation**

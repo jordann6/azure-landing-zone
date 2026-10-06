@@ -117,6 +117,18 @@ destroy-portal: ## Tear down the member portal (run scripts/portal-external-id.p
 test: ## Prove the guardrails actually deny, not just that apply succeeded
 	scripts/test-guardrails.sh
 
+.PHONY: deploy-observability test-observability destroy-observability
+deploy-observability: ## Control-plane change alerts + Defender findings export (free; needs the base deployed)
+	terraform -chdir=observability init
+	terraform -chdir=observability apply
+
+test-observability: ## Prove the change alerts exist and fire (creates and deletes one NSG)
+	scripts/test-observability.sh
+
+destroy-observability: ## Remove the change alerts and findings export before the base
+	terraform -chdir=observability init -input=false
+	terraform -chdir=observability destroy
+
 .PHONY: test-flow-logs
 test-flow-logs: ## Prove VNet flow logs are configured and delivering (needs enable_flow_logs and time for analytics lag)
 	scripts/test-flow-logs.sh

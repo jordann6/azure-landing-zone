@@ -100,3 +100,8 @@ output "log_analytics_workspace_guid" {
   description = "Central workspace customer ID (GUID), needed by traffic analytics in other roots."
   value       = azurerm_log_analytics_workspace.central.workspace_id
 }
+
+output "logging_resource_group_name" {
+  description = "Resource group holding the central workspace and alerts. The observability root puts its alerts here."
+  value       = azurerm_resource_group.logging.name
+}
