@@ -7,13 +7,16 @@
 #   scripts/migrate-state-backend.sh migrate          # phase 2: copy + verify
 #
 # Phase 2 records each root's resource count on the old backend, copies the
-# state, and fails if the count on the new backend differs. Old blobs are never
+# state, then fails unless the root is initialised against the new account, the
+# state blob exists there, and the resource count matches. Old blobs are never
 # deleted; they are the rollback (re-point the backend block and init again).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 OLD_RG="rg-tfbackend-jordprojs"
 OLD_SA="sttfbejordprojs8557"
+NEW_RG="rg-alz-tfstate"
+NEW_SA="stalztfstatejn"
 CONTAINER="tfstate"
 
 # root directory -> state key (keys are unchanged by the move)
@@ -37,7 +40,28 @@ init_old() {
 
 old_blob_exists() {
   az storage blob exists --auth-mode key --account-name "$OLD_SA" \
-    --container-name "$CONTAINER" --name "$1" --query exists -o tsv
+    --container-name "$CONTAINER" --name "$1" --query exists -o tsv 2>/dev/null
+}
+
+new_blob_exists() {
+  az storage blob exists --auth-mode login --account-name "$NEW_SA" \
+    --container-name "$CONTAINER" --name "$1" --query exists -o tsv 2>/dev/null
+}
+
+# Terraform caches -backend-config values from the previous init, so the
+# migration must name the new backend explicitly or it "migrates" to the old one.
+migrate_new() {
+  terraform -chdir="$ROOT/$1" init -migrate-state -force-copy -input=false \
+    -backend-config="resource_group_name=$NEW_RG" \
+    -backend-config="storage_account_name=$NEW_SA" \
+    -backend-config="container_name=$CONTAINER" \
+    -backend-config="key=$2" \
+    -backend-config="use_azuread_auth=true" >/dev/null
+}
+
+active_account() {
+  python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["backend"]["config"]["storage_account_name"])' \
+    "$ROOT/$1/.terraform/terraform.tfstate"
 }
 
 count() { terraform -chdir="$ROOT/$1" state list | wc -l | tr -d ' '; }
@@ -59,10 +83,21 @@ case "${1:-}" in
       init_old "$dir" "$key"
       before="$(count "$dir")"
       # Entra RBAC on the new account can lag a fresh assignment; retry once.
-      if ! terraform -chdir="$ROOT/$dir" init -migrate-state -force-copy -input=false >/dev/null; then
+      if ! migrate_new "$dir" "$key"; then
         echo "   retrying $dir in 60s (RBAC propagation)"
         sleep 60
-        terraform -chdir="$ROOT/$dir" init -migrate-state -force-copy -input=false >/dev/null
+        migrate_new "$dir" "$key"
+      fi
+      # Prove the move happened, not just that the counts agree.
+      if [[ "$(active_account "$dir")" != "$NEW_SA" ]]; then
+        echo "NOT MOVED $dir: still initialised against $(active_account "$dir")" >&2
+        failed=1
+        continue
+      fi
+      if [[ "$(new_blob_exists "$key")" != "true" ]]; then
+        echo "MISSING $dir: no $key in $NEW_SA" >&2
+        failed=1
+        continue
       fi
       after="$(count "$dir")"
       if [[ "$before" == "$after" ]]; then
