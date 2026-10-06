@@ -1,0 +1,8 @@
+// Traffic the network refused, by source and destination, last 24 hours.
+// Needs enable_flow_logs. NTANetAnalytics lags real traffic by 10 to 30 minutes.
+NTANetAnalytics
+| where TimeGenerated > ago(24h)
+| where FlowStatus == "Denied"
+| summarize flows = sum(AllowedInFlows + AllowedOutFlows + DeniedInFlows + DeniedOutFlows)
+    by SrcIp, DestIp, DestPort, L4Protocol, FlowDirection
+| order by flows desc

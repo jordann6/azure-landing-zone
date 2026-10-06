@@ -117,6 +117,10 @@ destroy-portal: ## Tear down the member portal (run scripts/portal-external-id.p
 test: ## Prove the guardrails actually deny, not just that apply succeeded
 	scripts/test-guardrails.sh
 
+.PHONY: test-flow-logs
+test-flow-logs: ## Prove VNet flow logs are configured and delivering (needs enable_flow_logs and time for analytics lag)
+	scripts/test-flow-logs.sh
+
 .PHONY: destroy-workload
 destroy-workload: ## Tear down the prod workload paved road (AKS, PostgreSQL, ACR, backup) before the base
 	@echo "==> A protected Backup vault can block deletion until retention clears; preserve recovery data and retry afterward."

@@ -32,6 +32,7 @@ def main():
         "microsoft.containerservice/managedclusters", "microsoft.dbforpostgresql/flexibleservers",
         "microsoft.app/containerapps", "microsoft.containerregistry/registries",
         "microsoft.sql/servers/databases", "microsoft.apimanagement/service",
+        "microsoft.network/networkwatchers/flowlogs",
     }
     survivors = []
     print("== Landing-zone teardown inventory ==")
@@ -59,6 +60,9 @@ def main():
         kind = item["type"].lower()
         if kind in billable:
             survivors.append(f"{item['type']}: {item['name']}")
+        elif kind == "microsoft.storage/storageaccounts" and "flow" in item["name"].lower():
+            # Flow-log storage bills by volume and is gated by enable_flow_logs.
+            survivors.append(f"flow-log storage account: {item['name']}")
         elif kind == "microsoft.compute/galleries/images/versions":
             survivors.append(f"billed gallery version: {item['name']}")
         elif kind == "microsoft.dataprotection/backupvaults":

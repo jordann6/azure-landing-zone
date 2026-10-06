@@ -90,3 +90,13 @@ output "ops_action_group_id" {
   description = "Ops action group, so other roots (workload, portal) route their alerts to the same place."
   value       = azurerm_monitor_action_group.ops.id
 }
+
+output "flow_log_storage_account_id" {
+  description = "Storage account holding raw VNet flow logs. Null unless enable_flow_logs is on. The prod workload root reads this."
+  value       = try(azurerm_storage_account.flow[0].id, null)
+}
+
+output "log_analytics_workspace_guid" {
+  description = "Central workspace customer ID (GUID), needed by traffic analytics in other roots."
+  value       = azurerm_log_analytics_workspace.central.workspace_id
+}

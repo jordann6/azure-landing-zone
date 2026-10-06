@@ -1,0 +1,8 @@
+// Anything that reached the PostgreSQL port (5432) in the prod VNet, and from where.
+// Only the AKS subnet should appear. A source outside it means segmentation failed.
+NTANetAnalytics
+| where TimeGenerated > ago(24h)
+| where DestPort == 5432
+| where FlowStatus == "Allowed"
+| summarize flows = sum(AllowedInFlows + AllowedOutFlows) by SrcIp, SrcSubnet, DestIp
+| order by flows desc
