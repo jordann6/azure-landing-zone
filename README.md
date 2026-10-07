@@ -56,7 +56,7 @@ reusable `landing-zone` spoke module are in [access-model.md](docs/access-model.
 ## Parity with the AWS and GCP zones
 
 Status as of 2026-10-06. "Built" means code merged or committed. "Proven" means a
-deploy-test-destroy session passed. Where a cell says pending, nothing was run. AKS and ACR on azurerm 4.x are not proven (AKS create hit regional capacity errors on 2026-10-06).
+deploy-test-destroy session passed. Where a cell says pending, nothing was run. AKS and ACR on azurerm 4.x were proven 2026-10-06 in eastus2 (centralus refused new AKS clusters with `AKSCapacityHeavyUsage`): clean post-apply plan, private VNet-integrated cluster with private KMS, ACR behind its private endpoint with CMK and the cache rule.
 
 | Capability | AWS | Azure | GCP |
 |---|---|---|---|
