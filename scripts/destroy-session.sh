@@ -3,7 +3,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 failed=0
-for root in compute workload terraform; do
+for root in compute secrets observability workload terraform; do
   if ! terraform -chdir="$ROOT/$root" init -input=false; then
     failed=1
     continue

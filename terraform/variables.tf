@@ -96,6 +96,34 @@ variable "enable_defender_standard" {
   description = "Turn on paid Microsoft Defender for Cloud plans. Off by default: the free foundational CSPM already renders the CIS assessment. Paid plans bill per resource."
 }
 
+variable "defender_servers_subplan" {
+  type        = string
+  default     = "P1"
+  description = "Defender for Servers sub-plan used when enable_defender_standard is on. P1 is about $5 per server per month, P2 about $15 (see docs/adr/0004-detection-tier.md)."
+
+  validation {
+    condition     = contains(["P1", "P2"], var.defender_servers_subplan)
+    error_message = "defender_servers_subplan must be P1 or P2."
+  }
+}
+
+variable "enable_flow_logs" {
+  type        = bool
+  default     = false
+  description = "VNet flow logs for the hub (and the prod VNet, via workload/) with traffic analytics in the central workspace. Off by default: storage and analytics bill by volume (small at demo traffic)."
+}
+
+variable "flow_log_retention_days" {
+  type        = number
+  default     = 7
+  description = "Days the raw flow logs stay in the storage account. Traffic analytics rows follow the workspace retention."
+
+  validation {
+    condition     = var.flow_log_retention_days >= 1 && var.flow_log_retention_days <= 365
+    error_message = "flow_log_retention_days must be between 1 and 365."
+  }
+}
+
 variable "create_entra_identity" {
   type        = bool
   default     = true

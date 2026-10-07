@@ -29,6 +29,10 @@ deployer_ip_cidrs = ["203.0.113.4/32"] # <-- replace with your IP/32
 # --- Defender for Cloud paid plans (bill per resource; off by default) -------
 # enable_defender_standard = true
 
+# --- VNet flow logs + traffic analytics (hub and prod; billed by volume) ---
+# enable_flow_logs        = true
+# flow_log_retention_days = 7
+
 # --- FinOps ---
 budget_amount = 20
 alert_email   = "you@example.com"

@@ -45,12 +45,12 @@ blocked at create time rather than only flagged after the fact:
 - **PIM (CIS 1)**: the JIT-to-Prod eligible assignment is in code but was not
   created in this deployment (no Entra ID P2). The persona groups and MG-scoped
   RBAC are live.
-- **VNet flow logs**: deferred until the azurerm v4 upgrade.
+- **VNet flow logs**: built behind `enable_flow_logs` (`terraform/flow-logs.tf`); off by default.
 - **HSM-backed keys (CIS 8)**: the CMK is software-protected; an HSM key needs a
   Premium vault, out of the demo budget. Documented as the upgrade path.
 - **Defender paid plans**: off by default (they bill per resource). Free
   foundational CSPM covers the CIS assessment; paid plans are one flag away
-  (`enable_defender_standard`).
+  (`enable_defender_standard`). See `docs/adr/0004-detection-tier.md`.
 - **Single subscription**: the tiers are management groups + resource groups, not
   a subscription per tier. See `access-model.md`.
 

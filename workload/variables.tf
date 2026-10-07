@@ -10,6 +10,12 @@ variable "project" {
   default     = "alz"
 }
 
+variable "resource_group_name" {
+  description = "Override for the prod workload resource group name (default rg-<project>-prod-workload). Use it to deploy in another region while the old group still holds a soft-deleted backup instance; keep the rg-<project>- prefix so verify-teardown.py covers it."
+  type        = string
+  default     = null
+}
+
 variable "owner" {
   type    = string
   default = "jordann6"

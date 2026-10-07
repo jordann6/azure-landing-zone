@@ -29,6 +29,7 @@ resource "azurerm_monitor_action_group" "ops" {
 # Activity log alert: any Deny policy effect anywhere in the subscription.
 resource "azurerm_monitor_activity_log_alert" "policy_deny" {
   name                = "alert-${var.project}-policy-deny"
+  location            = "global"
   resource_group_name = azurerm_resource_group.logging.name
   scopes              = [data.azurerm_subscription.current.id]
   description         = "A request was blocked by a Deny policy (public IP, region, tags, phi network access)."

@@ -11,3 +11,5 @@ these are what you run next.
 | `firewall-denies.kql` | What did the hub firewall block, from which source? |
 | `who-changed-what.kql` | Who created, changed, or deleted what this week? |
 | `bastion-sessions.kql` | Who connected through Bastion, to which VM, and for how long? |
+| `denied-flows.kql` | What traffic did the network refuse, between which addresses? (needs `enable_flow_logs`) |
+| `data-tier-reach.kql` | What reached the database port, and from which subnet? (needs `enable_flow_logs`) |

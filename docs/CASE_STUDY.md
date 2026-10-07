@@ -92,6 +92,16 @@ Server is capacity-restricted in the original region for this subscription
 (`list-skus` returns an empty version list), so the whole landing zone was moved
 to centralus, which has the versions plus zone-redundant HA. The move touched two
 tfvars, the two location defaults, and the `allowed_locations` guardrail list.
+On 2026-10-06 centralus then refused every new AKS cluster for this
+subscription (`AKSCapacityHeavyUsage`), whether private or public, Free or
+Standard tier, with or without API Server VNet Integration. Private KMS needs
+VNet integration, so the config stayed and the region moved. One-node probes with
+the exact private, VNet-integrated config succeeded in six other US regions, so
+the v4 proof ran in eastus2 (zone-redundant Postgres supported, already in
+`allowed_locations`). The base and workload moved together because the Prod
+single-region policy pins Prod to the base region, and a `resource_group_name`
+override kept the new workload group clear of the old one, which still holds a
+soft-deleted backup instance.
 
 **Management-group policy propagation is eventually consistent.** On a freshly
 built hierarchy, child-scope policy assignments 400 with "policy definition is out
@@ -103,6 +113,21 @@ the Postgres subnet, assigns HA zones, and applies a default node-pool
 `max_surge`. Each is declared explicitly (service endpoint, `zone`/
 `standby_availability_zone`, `upgrade_settings`) so plans stay clean instead of
 churning every run.
+
+## What it deliberately does not do
+
+- **One subscription.** The AWS zone isolates tiers with accounts and the GCP zone
+  with projects. With no EA or MCA to vend subscriptions, Azure uses management
+  groups and resource groups, so a subscription-level mistake reaches every tier.
+- **No threat-detection service.** Detection is the free Defender tier, change
+  alerts on every guardrail, and a full audit trail. Paid Defender plans and
+  Sentinel are costed and left off ([ADR-0004](adr/0004-detection-tier.md)).
+- **Observability is not a retained baseline.** Unlike the AWS root, it cannot
+  outlive the base, because the workspace is destroyed with it.
+
+Flow logs, the observability root, the secrets root, and AKS and ACR on azurerm
+4.x were proven in deploy-test-destroy sessions on 2026-10-06 (see the last
+section). The parity table in the README says which items are proven.
 
 ## Verification and teardown
 
@@ -135,3 +160,42 @@ This proves the implemented CIS-informed controls, not full benchmark compliance
 The supervised session excludes Firewall, Bastion, AKS, and PostgreSQL. Its
 teardown removes compute, Packer-created image storage, and the free base while
 preserving the existing backup vault's protected recovery data.
+
+## Parity gap-close proven live
+
+On 2026-10-06 the zone moved to azurerm 4.x and gained VNet flow logs, an
+observability root and a secrets root. A deploy-test-destroy session ran them
+against real Azure:
+
+- **Flow logs:** 9 of 9 checks pass. Hub and prod flow logs write to a
+  CMK-encrypted, default-Deny storage account through the trusted-service bypass,
+  and Traffic Analytics returned 190 `NTANetAnalytics` rows.
+- **Observability:** 4 of 4 checks pass. The change alerts exist and fire.
+- **Secrets:** 11 of 11 checks pass. The scanner identity holds Key Vault Reader,
+  `checkAccess` shows metadata `Allowed` and `getSecret` `NotAllowed`, a real
+  secret value read as a Reader principal returns 403, the seeded no-expiry secret
+  meets the finding criterion, and a NearExpiry audit event reached the workspace
+  and the alert fired. The 403 also triggered the forbidden-read alert, and that
+  email arrived, which proves the detection path end to end.
+- **Backup instance:** the azurerm resource returned 406 on create and delete, so
+  it is an `azapi` resource. Create and destroy both worked.
+- **Teardown:** `make destroy` then `verify-teardown.sh` passed. The backup vault
+  and soft-deleted Key Vaults remain by design.
+- **AKS and ACR on azurerm 4.x (4.81.0), eastus2:** AKS `Succeeded`, 2 of 2
+  nodes Ready (checked through `az aks command invoke`, the cluster is private),
+  API Server VNet Integration on the delegated subnet, etcd KMS with
+  `keyVaultNetworkAccess = Private`, OIDC issuer and workload identity enabled,
+  egress by user-defined routing to the hub firewall. ACR Premium with public
+  access disabled, an approved private endpoint, CMK encryption, and the
+  `mcr-cache` rule `Succeeded`. After apply, `terraform plan -detailed-exitcode`
+  returned no changes for both the workload and the base, which is the rename
+  proof. `make destroy` then `verify-teardown.sh` passed again.
+
+### Not proven
+
+- The Expired variants of the secrets alert are matched by name and not observed.
+- **Warm standby is not an LZ-wide capability.** The member portal has a measured
+  two-region setup (Front Door shift 83.9 s, SQL failover group planned failover
+  RTO 7.3 s and RPO 0), but only planned failovers were drilled. The prod tier has
+  in-region zone-redundant HA and a geo-redundant backup vault, and a policy pins
+  Prod to one region.

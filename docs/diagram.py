@@ -79,6 +79,11 @@ with Diagram(
         alerts = Alerts("Alerts -> ops action group\npolicy deny, KV 403,\nfirewall deny spike")
         kv = KeyVaults("Key Vault + CMK\n(rotation, purge protection)")
 
+    with Cluster("Layered roots (own state, destroyed before the base)"):
+        flow = LogAnalyticsWorkspaces("VNet flow logs\n(hub + prod, CMK storage,\nTraffic Analytics)")
+        obs = Alerts("observability/\n13 change alerts +\nDefender export")
+        sec = KeyVaults("secrets/\nscanner UAMI (KV Reader),\nnear-expiry alert")
+
     with Cluster("Spoke landing zones (peered to hub, default-deny NSG)"):
         sp_dev = VirtualNetworks("dev 10.1.0.0/16")
         sp_test = VirtualNetworks("test 10.2.0.0/16")
@@ -109,3 +114,6 @@ with Diagram(
     policy >> Edge(style="dotted") >> mg_workloads
     kv >> Edge(label="audit logs", style="dotted") >> law
     defender >> Edge(style="dotted") >> mg_root
+    hub >> Edge(label="flow logs", style="dotted") >> flow >> law
+    obs >> Edge(style="dotted") >> law
+    sec >> Edge(label="reader", style="dotted") >> kv

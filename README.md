@@ -42,6 +42,40 @@ Same design contract, three different control planes:
 - **Identity/JIT**: **Entra ID groups + PIM**, where AWS uses **IAM Identity Center
   permission sets** and GCP uses **Cloud Identity + IAM Conditions**.
 
+## Single subscription by design
+
+The AWS zone has a management account plus eight member accounts (security,
+network, shared services, log archive, dev, test, prod and sandbox) and the GCP
+zone vends a project per tier. This zone has one subscription, because there is no EA or MCA to vend more.
+The tiers are management groups plus resource groups, and policy attaches to the
+management group the subscription sits under. What that costs is blast-radius
+isolation: a subscription-level mistake reaches every tier, where an account or
+project boundary would stop it. The intended subscription-per-tier layout and the
+reusable `landing-zone` spoke module are in [access-model.md](docs/access-model.md).
+
+## Parity with the AWS and GCP zones
+
+Status as of 2026-10-06. "Built" means code merged or committed. "Proven" means a
+deploy-test-destroy session passed. Where a cell says pending, nothing was run. AKS and ACR on azurerm 4.x were proven 2026-10-06 in eastus2 (centralus refused new AKS clusters with `AKSCapacityHeavyUsage`): clean post-apply plan, private VNet-integrated cluster with private KMS, ACR behind its private endpoint with CMK and the cache rule.
+
+| Capability | AWS | Azure | GCP |
+|---|---|---|---|
+| Isolation boundary | Accounts per tier | One subscription, management groups and resource groups | Project per tier |
+| Preventive guardrails | SCPs, proven denials | Azure Policy Deny, proven denials | Org policy and custom constraints, proven denials |
+| Central audit log | Org trail, Object Lock | Activity log to Log Analytics | Org sinks to BigQuery and a log bucket |
+| Network flow logs | Built | Proven 2026-10-06 (hub and prod, CMK storage, Traffic Analytics), behind `enable_flow_logs` | Built (subnet flow logging, 50% sampling) |
+| Observability layer | Own root, cross-account, retained | Own root, proven 2026-10-06, not retained (workspace lives in the base) | Sinks and CIS alert metrics in the base, ops layer queued |
+| Findings routing | HIGH and CRITICAL to SNS | Defender export to the workspace, quiet on the free tier | SCC to Pub/Sub, off in the recorded deploy |
+| Threat detection | GuardDuty | Not enabled, see [ADR-0004](docs/adr/0004-detection-tier.md) | SCC, activation is manual |
+| Compute baseline | Guardrails live, compute proven 2026-10-06 | Image and VM proven 2026-10-05 | Code complete, live run pending |
+| Dedicated state backend | Built | Built | Built |
+| Secrets scanner | Live | Identity, alert and positive control proven 2026-10-06 (metadata-only role, 403 on value read, NearExpiry alert); the Rails scanner itself is not run here | None |
+| Warm standby | Not started | Member portal only: two-region app and SQL failover group, planned failovers measured 2026-10-03. Prod LZ tier has in-region zone HA and geo-redundant backup only | None |
+
+The gaps that remain on the Azure side are the missing threat-detection service
+and the single-subscription boundary. Both are deliberate and written up, not
+oversights.
+
 ## What gets built, by tier and pillar
 
 **Governance (free layer).**
@@ -90,6 +124,15 @@ Same design contract, three different control planes:
 - **Alerting** through one action group: any Deny policy event, any Key Vault 403,
   and a firewall deny spike (`terraform/alerts.tf`). The matching investigation
   queries are saved in [docs/kql/](docs/kql/).
+- **Observability root** (`observability/`, its own state, applied after the base):
+  13 control-plane change alerts (policy assignment, NSG and rule, firewall policy,
+  security solution, role assignment, Key Vault delete; the CIS 5.2.x set plus a few
+  more) and Defender for Cloud continuous export of High alerts and assessments into
+  the central workspace, with an alert on High findings. The free CSPM tier produces
+  recommendations only, so the High-alert path stays quiet until a paid Defender plan
+  is on. `make deploy-observability`, then `make test-observability`.
+- **VNet flow logs** for the hub and prod VNets with traffic analytics, behind
+  `enable_flow_logs` (`terraform/flow-logs.tf`). `make test-flow-logs`.
 - **Key Vault** with purge protection + soft delete + default-Deny network ACL, and
   a **CMK with a rotation policy** (`terraform/keyvault.tf`).
 - A monthly **budget** with actual + forecast alerts (`terraform/budgets.tf`).
@@ -121,7 +164,7 @@ IP, the Log Analytics workspace) and peering the prod VNet to the hub.
 | Registry | **ACR Premium**: no public access, CMK, private endpoint, MCR pull-through cache, the only sanctioned image source (`workload/acr.tf`). |
 | Private access | Private endpoints + private DNS for ACR and Key Vault, so the private cluster pulls images and reads secrets with no internet path (`workload/private-endpoints.tf`). |
 | Backup | Geo-redundant Backup vault with soft delete, protecting the database (`workload/backup.tf`). |
-| Network | Prod VNet `10.3`, no public IP/NAT, egress `0.0.0.0/0` to the hub firewall, app/data NSGs (`workload/network.tf`, `workload/segmentation.tf`). VNet flow logs are deferred until the azurerm v4 upgrade. |
+| Network | Prod VNet `10.3`, no public IP/NAT, egress `0.0.0.0/0` to the hub firewall, app/data NSGs (`workload/network.tf`, `workload/segmentation.tf`). VNet flow logs (`workload/flow-logs.tf`) follow the base `enable_flow_logs` flag. |
 
 Because a private AKS cluster with UDR egress cannot provision unless the firewall
 permits AKS's required destinations, `workload/aks-egress-firewall.tf` attaches an
@@ -150,7 +193,7 @@ failover RTO and RPO instead of claiming them. Design, trade-offs, and runbook:
 
 State lives in a backend this landing zone owns, created and hardened by
 `bootstrap/`, the one layer that stands between sessions. Why it moved off the
-shared account, and the trade-offs: [docs/adr-state-backend.md](docs/adr-state-backend.md).
+shared account, and the trade-offs: [docs/adr/0001-dedicated-state-backend.md](docs/adr/0001-dedicated-state-backend.md).
 
 | Control | How it is met |
 |---|---|
@@ -274,12 +317,12 @@ without IDPS, software-protected key) are inline-skipped with reasons in the cod
 - [docs/accelerator-vs-bespoke.md](docs/accelerator-vs-bespoke.md): why bespoke modules over the ALZ accelerator.
 - [docs/hipaa-mapping.md](docs/hipaa-mapping.md): HIPAA 164.312 technical safeguards → Terraform resource, with honest gaps.
 - [docs/kql/](docs/kql/): saved investigation queries behind the alerts.
-- [docs/adr-state-backend.md](docs/adr-state-backend.md): why state moved to a dedicated, hardened backend.
+- [docs/adr/](docs/adr/): decision records: state backend, compute image exemption, azurerm 4.x, detection tier.
 - [docs/portal.md](docs/portal.md): member portal design, two-clock failover, trade-offs, deploy and drill runbook.
 
 ## Tech stack
 
-- **Terraform** `>= 1.6`, `azurerm ~> 3.100`, `azuread ~> 2.50`, dedicated hardened Azure Storage state backend
+- **Terraform** `>= 1.6`, `azurerm ~> 4.0`, `azuread ~> 2.50`, dedicated hardened Azure Storage state backend
 - **Azure Management Groups + Azure Policy** (Deny) + built-in CIS and HITRUST/HIPAA initiatives
 - **Azure Firewall + Bastion + UDR + Private Endpoints/DNS** hub-spoke inspection
 - **Log Analytics + Azure Monitor alerts + Defender for Cloud**, **Key Vault + CMK rotation**
@@ -337,7 +380,7 @@ running a full plan. Keep the default-deny firewall and existing RBAC.
 
 The pipeline publishes `hardened-ubuntu-2204` to the gallery using
 local release `azure-vm-hardening` tag `v2.0.1`. See
-[the build exemption ADR](docs/adr-compute-image-exemption.md) for the two timed
+[the build exemption ADR](docs/adr/0002-compute-image-exemption.md) for the two timed
 bootstrap exemptions and local tag resolution. Nothing has been pushed.
 
 The `compute/` root creates a private `Standard_B2s` management VM with

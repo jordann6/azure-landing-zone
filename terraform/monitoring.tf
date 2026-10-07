@@ -64,6 +64,9 @@ resource "azurerm_security_center_subscription_pricing" "plans" {
   for_each      = toset(local.defender_plans)
   tier          = "Standard"
   resource_type = each.value
+  # Only the Servers plan has sub-plans. Pinned so the bill is predictable (P1 is
+  # about a third of P2); every other plan takes null.
+  subplan = each.value == "VirtualMachines" ? var.defender_servers_subplan : null
 }
 
 # ── Azure Firewall logs (gated with the firewall) ────────────────────────────

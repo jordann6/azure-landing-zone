@@ -5,7 +5,7 @@
 # egress through the TGW to the hub firewall).
 
 resource "azurerm_resource_group" "prod" {
-  name     = "rg-${var.project}-prod-workload"
+  name     = coalesce(var.resource_group_name, "rg-${var.project}-prod-workload")
   location = var.location
   tags     = local.tags
 }

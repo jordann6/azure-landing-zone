@@ -50,7 +50,7 @@ resource "azurerm_key_vault" "state" {
   tenant_id           = data.azurerm_client_config.current.tenant_id
   sku_name            = "standard"
 
-  enable_rbac_authorization  = true
+  rbac_authorization_enabled = true
   purge_protection_enabled   = true
   soft_delete_retention_days = 90
 
@@ -132,6 +132,9 @@ resource "azurerm_storage_account" "state" {
   account_kind             = "StorageV2"
   account_tier             = "Standard"
   account_replication_type = "GRS"
+  # v4 flips the default to false; the live account was created with v3 (true).
+  # Explicit false is the intended hardening and the only in-place change in the upgrade.
+  cross_tenant_replication_enabled = false
 
   min_tls_version                   = "TLS1_2"
   https_traffic_only_enabled        = true

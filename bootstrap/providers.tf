@@ -4,7 +4,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.100"
+      version = "~> 4.0"
     }
     time = {
       source  = "hashicorp/time"
@@ -15,7 +15,7 @@ terraform {
   # This root creates the storage account it stores its own state in. The first
   # apply runs against the previous backend through -backend-config overrides,
   # then scripts/migrate-state-backend.sh moves this state (and every other
-  # root's) into the account below. See docs/adr-state-backend.md.
+  # root's) into the account below. See docs/adr/0001-dedicated-state-backend.md.
   backend "azurerm" {
     resource_group_name  = "rg-alz-tfstate"
     storage_account_name = "stalztfstatejn"
