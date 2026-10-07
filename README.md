@@ -44,14 +44,20 @@ Same design contract, three different control planes:
 
 ## Single subscription by design
 
-The AWS zone has a management account plus eight member accounts (security,
-network, shared services, log archive, dev, test, prod and sandbox) and the GCP
-zone vends a project per tier. This zone has one subscription, because there is no EA or MCA to vend more.
-The tiers are management groups plus resource groups, and policy attaches to the
-management group the subscription sits under. What that costs is blast-radius
-isolation: a subscription-level mistake reaches every tier, where an account or
-project boundary would stop it. The intended subscription-per-tier layout and the
-reusable `landing-zone` spoke module are in [access-model.md](docs/access-model.md).
+This zone runs in one subscription, because there is no EA or MCA to vend more.
+The subscription sits under the Workloads management group, so it inherits every
+assignment at the root and at Workloads. The Dev, Test, Prod and Sandbox
+management groups exist and carry their tier-specific assignments (the Prod
+single-region location policy, standing Reader plus PIM-eligible Contributor at
+Prod), but with no subscription beneath them those assignments bind nothing in
+this demo. They take effect once each tier has its own subscription. Resource
+groups separate each tier's resources but do not receive tier policy.
+
+What that costs is blast-radius isolation and tier-specific enforcement: a
+subscription-level mistake reaches every tier, and Prod is governed exactly like
+the rest of Workloads, not more strictly. The intended subscription-per-tier
+layout and the reusable `landing-zone` spoke module are in
+[access-model.md](docs/access-model.md).
 
 ## Parity with the AWS and GCP zones
 
@@ -80,10 +86,12 @@ oversights.
 
 **Governance (free layer).**
 - Management-group tree: root → Platform, Workloads (Dev, Test, Prod), Sandbox
-  (`terraform/main.tf`). The subscription is associated to Workloads so policy
-  inherits down.
+  (`terraform/main.tf`). The subscription is associated to Workloads, so root
+  and Workloads assignments apply to it; the Dev, Test, Prod and Sandbox groups
+  have no subscription and their assignments bind nothing yet.
 - Preventive **Deny** policies at the hierarchy: deny public IP, allowed locations
-  (tighter at Prod), and required tags (`owner`, `cost_center`, `environment`,
+  (a tighter Prod assignment is wired at the Prod group, inert until Prod has its
+  own subscription), and required tags (`owner`, `cost_center`, `environment`,
   `data_classification`) (`terraform/policies.tf`). The deny-public-IP assignment
   excludes the hub resource group (`not_scopes`), where the firewall and bastion
   legitimately hold public IPs: in the intended multi-subscription design the hub
@@ -168,9 +176,7 @@ IP, the Log Analytics workspace) and peering the prod VNet to the hub.
 
 Because a private AKS cluster with UDR egress cannot provision unless the firewall
 permits AKS's required destinations, `workload/aks-egress-firewall.tf` attaches an
-`AzureKubernetesService` FQDN-tag rule collection to the base firewall policy. This
-is the Azure analog of the hub firewall's domain allowlist that fronts the private
-EKS cluster on the AWS side.
+`AzureKubernetesService` FQDN-tag rule collection to the base firewall policy.
 
 Deploy it after the base (with the hourly firewall up): `make deploy-workload`, tear
 it down first with `make destroy-workload`.

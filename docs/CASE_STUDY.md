@@ -9,8 +9,7 @@ ticket.
 
 But a governed foundation is only half the story. A paved road is only real if a
 workload can actually land on it and inherit the controls without hand-wiring
-each one. So this project is two layers that mirror the AWS side
-(`aws-landing-zone`): a **base landing zone** that establishes the governance a
+each one. So this project is two layers: a **base landing zone** that establishes the governance a
 subscription inherits, and a **prod workload** (private AKS plus a managed
 database) that deploys onto it as the reference paved road.
 
@@ -38,9 +37,10 @@ Two Terraform roots against one subscription.
 
 - **Governance that attaches to placement.** Moving the subscription into the
   Workloads management group means every policy assigned there applies
-  automatically: require owner tag, deny public IPs, allowed locations, required
-  cost-center/environment/data-classification tags, and a prod single-region
-  policy, plus the CIS initiative.
+  automatically: require owner tag, deny public IPs, allowed locations, and
+  required cost-center/environment/data-classification tags, plus the CIS
+  initiative. A stricter Prod single-region policy is assigned at the Prod group,
+  but no subscription sits there in this demo, so it binds nothing yet.
 - **Private AKS, no public control plane.** `private_cluster_enabled`, OIDC
   issuer and workload identity on, local accounts disabled, and
   `outbound_type = userDefinedRouting` so all egress leaves only through the hub
@@ -98,10 +98,10 @@ Standard tier, with or without API Server VNet Integration. Private KMS needs
 VNet integration, so the config stayed and the region moved. One-node probes with
 the exact private, VNet-integrated config succeeded in six other US regions, so
 the v4 proof ran in eastus2 (zone-redundant Postgres supported, already in
-`allowed_locations`). The base and workload moved together because the Prod
-single-region policy pins Prod to the base region, and a `resource_group_name`
-override kept the new workload group clear of the old one, which still holds a
-soft-deleted backup instance.
+`allowed_locations`). The base and workload moved together to keep the hub and
+its spoke in one region, and a `resource_group_name` override kept the new
+workload group clear of the old one, which still holds a soft-deleted backup
+instance.
 
 **Management-group policy propagation is eventually consistent.** On a freshly
 built hierarchy, child-scope policy assignments 400 with "policy definition is out
@@ -122,8 +122,7 @@ churning every run.
 - **No threat-detection service.** Detection is the free Defender tier, change
   alerts on every guardrail, and a full audit trail. Paid Defender plans and
   Sentinel are costed and left off ([ADR-0004](adr/0004-detection-tier.md)).
-- **Observability is not a retained baseline.** Unlike the AWS root, it cannot
-  outlive the base, because the workspace is destroyed with it.
+- **Observability is not a retained baseline.** It cannot outlive the base, because the workspace is destroyed with it.
 
 Flow logs, the observability root, the secrets root, and AKS and ACR on azurerm
 4.x were proven in deploy-test-destroy sessions on 2026-10-06 (see the last
