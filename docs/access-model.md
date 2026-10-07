@@ -38,9 +38,13 @@ hierarchy:
 
 This demo runs in a **single subscription** because there is no EA/MCA agreement
 to vend subscriptions. The tiers are therefore represented by management groups
-plus resource groups: policy inheritance, RBAC scoping, and the CIS initiative all
-attach at MG scope exactly as they would with real subscriptions, so the model is
-faithful and the only missing piece is the subscription boundary itself. Moving to
+plus resource groups. Policy, RBAC and the CIS initiative attach at MG scope exactly
+as they would with real subscriptions, but the one subscription sits under the
+Workloads group, so only root and Workloads assignments reach it. The Dev, Test,
+Prod and Sandbox assignments (including Prod's single-region policy and its
+Reader plus PIM-eligible Contributor split) are wired with nothing beneath them,
+so in this demo they are code, not enforcement. Resource groups separate the
+tiers' resources but carry no tier policy. Moving to
 real subscriptions is a matter of creating them and associating each to its MG;
 no policy or identity code changes.
 
