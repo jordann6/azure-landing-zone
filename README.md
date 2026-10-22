@@ -62,7 +62,7 @@ behind `enable_pim`.
 ## What the live runs found
 
 Plans and `validate` were clean for every one of these. Each surfaced only on a
-real apply in Azure.
+real deploy, image bake or teardown in Azure.
 
 1. **Private KMS for AKS needs API Server VNet Integration.** Encrypting etcd with
    a Key Vault reached over a private endpoint failed until the cluster got a
