@@ -1,119 +1,78 @@
-from diagrams import Diagram, Cluster, Edge
-from diagrams.azure.general import Managementgroups, Subscriptions
-from diagrams.azure.network import (
-    VirtualNetworks,
-    Subnets,
-    Firewall,
-    RouteTables,
-    PrivateEndpoint,
-    DNSPrivateZones,
-)
-from diagrams.azure.compute import SharedImageGalleries, VMLinux, ImageDefinitions
-from diagrams.azure.security import KeyVaults, SecurityCenter
+"""Render docs/architecture.png for the base landing zone.
+
+Run from the repo root: python3 docs/diagram.py (needs diagrams and Graphviz).
+Reads left to right: governance, then the hub, then the spokes it inspects, with
+logging on the right. The prod spoke belongs to the workload/ root and is drawn
+in docs/workload.py.
+"""
+
+import os
+
+from diagrams import Cluster, Diagram, Edge
 from diagrams.azure.analytics import LogAnalyticsWorkspaces
+from diagrams.azure.compute import SharedImageGalleries
+from diagrams.azure.general import Managementgroups, Subscriptions
 from diagrams.azure.identity import ActiveDirectory
 from diagrams.azure.managementgovernance import Alerts, Policy
-from diagrams.onprem.network import Internet
-from diagrams.onprem.iac import Terraform
+from diagrams.azure.network import Firewall, PrivateEndpoint, RouteTables, VirtualNetworks
+from diagrams.azure.security import KeyVaults, SecurityCenter
 from diagrams.custom import Custom
+from diagrams.onprem.network import Internet
 
 # The mingrammer library has no Azure Bastion node, so use the official Azure
 # Bastion service icon (docs/icons/azure-bastion.png) as a custom node.
-import os
-
 BASTION_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "azure-bastion.png")
 
-graph_attrs = {"fontsize": "13", "bgcolor": "white", "pad": "0.5", "splines": "ortho"}
-node_attrs = {"fontsize": "11"}
+GOV = {"bgcolor": "#eef6ff", "color": "#7299bd", "fontsize": "15"}
+HOURLY = {"bgcolor": "#fff4e7", "color": "#d49447", "fontsize": "15"}
+SPOKES = {"bgcolor": "#f4f9ee", "color": "#8fb56a", "fontsize": "15"}
+EGRESS = "#ac6413"
 
 with Diagram(
-    "Azure Landing Zone",
+    "Azure Landing Zone | base",
     filename="docs/architecture",
     outformat="png",
     show=False,
-    direction="TB",
-    graph_attr=graph_attrs,
-    node_attr=node_attrs,
+    direction="LR",
+    graph_attr={"fontsize": "20", "pad": "0.4", "nodesep": "0.5", "ranksep": "1.0"},
+    node_attr={"fontsize": "12"},
 ):
-    tf = Terraform("Terraform\n(IaC)")
+    with Cluster("Governance | free layer, inherited by every resource", graph_attr=GOV):
+        root = Managementgroups("Root MG\nCIS + HIPAA scoring")
+        workloads = Managementgroups("Workloads MG\n(Dev, Test, Prod beneath)")
+        sub = Subscriptions("Single subscription")
+        deny = Policy("Deny policies\npublic IP, regions, tags,\nphi, VM image + SKU")
+        entra = ActiveDirectory("7 persona groups\nPIM to Prod (P2)")
+        root >> workloads >> sub
+        deny >> Edge(style="dashed") >> root
+        entra >> Edge(style="dashed") >> root
+
+    with Cluster("Hub VNet 10.0.0.0/16 | hourly, flag-gated", graph_attr=HOURLY):
+        bastion = Custom("Bastion\nonly admin path", BASTION_ICON)
+        udr = RouteTables("Route table\n0.0.0.0/0 -> firewall")
+        fw = Firewall("Azure Firewall\nthreat-intel deny")
+        pe = PrivateEndpoint("Key Vault\nprivate endpoint")
+
+    with Cluster("Spokes | peered, default-deny NSG", graph_attr=SPOKES):
+        dev = VirtualNetworks("dev 10.1")
+        test = VirtualNetworks("test 10.2")
+        sandbox = VirtualNetworks("sandbox 10.4")
+
     inet = Internet("Internet")
 
-    with Cluster("Management Group Hierarchy  ·  CIS + HITRUST/HIPAA scoring  ·  Deny policies (inherited)"):
-        mg_root = Managementgroups("jordann6\n(root)")
-        mg_platform = Managementgroups("Platform")
-        mg_workloads = Managementgroups("Workloads")
-        mg_sandbox = Managementgroups("Sandbox")
-        with Cluster("Workloads"):
-            mg_dev = Managementgroups("Dev")
-            mg_test = Managementgroups("Test")
-            mg_prod = Managementgroups("Prod\n(stricter)")
-        sub = Subscriptions("Subscription\n(single-sub demo)")
-        policy = Policy("Deny: public IP, regions,\nrequired tags, data_classification,\nphi = no public network,\nVM images/SKUs/host encryption")
+    with Cluster("Logging, keys, compute", graph_attr=GOV):
+        law = LogAnalyticsWorkspaces("Central\nLog Analytics")
+        alerts = Alerts("Alerts\npolicy deny, KV 403,\nfirewall deny spike")
+        defender = SecurityCenter("Defender for Cloud\nfree CSPM")
+        kv = KeyVaults("Key Vault\nCMK, purge protection")
+        gallery = SharedImageGalleries("Compute Gallery\nonly allowed VM images")
 
-        mg_root >> [mg_platform, mg_workloads, mg_sandbox]
-        mg_workloads >> [mg_dev, mg_test, mg_prod]
+    for spoke in (dev, test, sandbox):
+        spoke >> Edge(color=EGRESS) >> udr
+    udr >> Edge(color=EGRESS) >> fw >> Edge(color=EGRESS, label="SNAT") >> inet
 
-    with Cluster("Identity (Entra ID)"):
-        aad = ActiveDirectory("7 persona groups\nRBAC @ MG scope; PIM optional")
-
-    with Cluster("Hub VNet  10.0.0.0/16  ·  centralus"):
-        hub = VirtualNetworks("vnet-alz-hub")
-        fw = Firewall("Azure Firewall\n(Standard, threat-intel Deny)")
-        udr = RouteTables("UDR 0.0.0.0/0\n-> firewall")
-        bastion = Custom("Bastion\n(optional browser admin)", BASTION_ICON)
-        s_pl = Subnets("snet-privatelink")
-        mgmt = VMLinux("Management VM\n(private golden image; live proof)")
-
-        with Cluster("Private access"):
-            pe = PrivateEndpoint("KV private endpoint")
-            dns = DNSPrivateZones("privatelink DNS zones")
-
-    with Cluster("Compute baseline (Packer + live Run Command proof)"):
-        packer = ImageDefinitions("Packer bake")
-        gallery = SharedImageGalleries("Approved Compute Gallery")
-        packer >> gallery >> mgmt
-
-    with Cluster("Platform services"):
-        law = LogAnalyticsWorkspaces("Log Analytics\n(central)")
-        defender = SecurityCenter("Defender for Cloud\n(CIS + HIPAA assessments)")
-        alerts = Alerts("Alerts -> ops action group\npolicy deny, KV 403,\nfirewall deny spike")
-        kv = KeyVaults("Key Vault + CMK\n(rotation, purge protection)")
-
-    with Cluster("Layered roots (own state, destroyed before the base)"):
-        flow = LogAnalyticsWorkspaces("VNet flow logs\n(hub + prod, CMK storage,\nTraffic Analytics)")
-        obs = Alerts("observability/\n13 change alerts +\nDefender export")
-        sec = KeyVaults("secrets/\nscanner UAMI (KV Reader),\nnear-expiry alert")
-
-    with Cluster("Spoke landing zones (peered to hub, default-deny NSG)"):
-        sp_dev = VirtualNetworks("dev 10.1.0.0/16")
-        sp_test = VirtualNetworks("test 10.2.0.0/16")
-        sp_prod = VirtualNetworks("prod 10.3.0.0/16")
-        sp_sand = VirtualNetworks("sandbox 10.4.0.0/16")
-
-    tf >> mg_root
-    tf >> hub
-
-    # Egress inspection: every spoke's default route goes through the firewall,
-    # which SNATs outbound to the internet. The firewall public IP is the only
-    # egress point; the bastion public IP is the only inbound admin path.
-    fw >> udr
-    for sp in [sp_dev, sp_test, sp_prod, sp_sand]:
-        hub >> Edge(label="peered") >> sp
-        udr >> Edge(label="inspected egress", style="dashed") >> sp
-    fw >> Edge(label="egress (SNAT)") >> inet
-    inet >> Edge(label="admin (HTTPS portal)", style="dashed") >> bastion
-
-    # Private path to the Key Vault.
-    s_pl >> pe >> Edge(style="dashed") >> kv
-    pe >> dns
-
-    # Telemetry + CMK wiring.
-    hub >> Edge(style="dotted") >> law
-    fw >> Edge(style="dotted") >> law
-    law >> Edge(style="dotted") >> alerts
-    policy >> Edge(style="dotted") >> mg_workloads
-    kv >> Edge(label="audit logs", style="dotted") >> law
-    defender >> Edge(style="dotted") >> mg_root
-    hub >> Edge(label="flow logs", style="dotted") >> flow >> law
-    obs >> Edge(style="dotted") >> law
-    sec >> Edge(label="reader", style="dotted") >> kv
+    pe >> Edge(style="dashed") >> kv
+    fw >> Edge(style="dotted", label="rule logs") >> law
+    law >> alerts
+    defender >> Edge(style="dotted") >> law
+    gallery >> Edge(style="invis") >> defender
