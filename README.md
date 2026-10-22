@@ -10,7 +10,15 @@ zones (AWS, Azure, GCP) in this portfolio; the three do not communicate.
 
 ## Architecture
 
-![Architecture](docs/architecture.png)
+![Azure landing zone base architecture](docs/architecture.png)
+
+Read it left to right. Every spoke's default route points at the hub firewall,
+so the only way out is Azure Firewall with threat-intel deny, then SNAT. Bastion
+is the only admin path and no workload holds a public IP. Governance (bottom)
+is the free layer: Deny policies and persona RBAC attach at the root management
+group, and the single subscription inherits them through Workloads. The hub
+(orange) bills by the hour and comes up only behind flags. The prod spoke
+belongs to the separate [workload root](#workload-paved-road-prod-tier-workload).
 
 ## The problem it solves
 
@@ -22,6 +30,63 @@ future resource inherits them, the network forces all egress through one inspect
 chokepoint, the only admin path is Bastion, and the whole thing is scored against
 the CIS Azure Foundations Benchmark. It stands up, proves its guardrails deny, and
 tears down under a fixed budget.
+
+## Key decisions
+
+**Bespoke Terraform instead of the ALZ accelerator.** Every management group,
+Deny policy and route here is a resource I wrote and can explain line by line;
+an accelerator hides those decisions behind a variable file. It also keeps the
+three landing zones structurally parallel and lets every hourly resource sit
+behind a flag. At real scale I would adopt the AVM enterprise-scale module and
+keep only the custom parts. [accelerator-vs-bespoke](docs/accelerator-vs-bespoke.md).
+
+**One subscription, tiered by management group and resource group.** There is
+no EA or MCA to vend more. The cost is blast-radius isolation and stricter Prod
+policy, which is spelled out in [the next section](#single-subscription-by-design)
+rather than hidden.
+
+**A scoped carve-out instead of a weaker policy.** Deny-public-IP applies to the
+whole subscription except the hub resource group, where the firewall and Bastion
+need public IPs. Every workload spoke stays denied.
+
+**No SIEM and no paid Defender plans by default.** Sentinel bills per GB on top of
+Log Analytics and has no value in a stack that lives for hours. The paid Defender
+plans sit behind one flag, and the findings export is wired already, so turning a
+plan on needs no further Terraform. The gap is stated plainly: nothing here
+watches behaviour. [ADR-0004](docs/adr/0004-detection-tier.md).
+
+**Just-in-time Prod access behind a license flag.** PIM needs Entra ID P2. Without
+it the persona groups and MG-scoped RBAC still deploy, and the JIT wiring waits
+behind `enable_pim`.
+
+## What the live runs found
+
+Plans and `validate` were clean for every one of these. Each surfaced only on a
+real deploy, image bake or teardown in Azure.
+
+1. **Private KMS for AKS needs API Server VNet Integration.** Encrypting etcd with
+   a Key Vault reached over a private endpoint failed until the cluster got a
+   delegated `/28` API server subnet.
+2. **AKS could not approve its own private endpoint.** AKS creates a managed
+   private endpoint to the vault for KMS, and the create failed with
+   `LinkedAuthorizationFailed`. Fixed with a least-privilege custom role that can
+   only approve private endpoint connections on that vault.
+3. **The default-deny NSG blocked Postgres HA.** The zone-redundant standby could
+   not replicate (`VnetReplicationToPrimaryNetworkBlocked`) until the data
+   subnet allowed 5432 inside itself.
+4. **A role assignment worked only at a wider scope.** The Postgres backup role
+   includes `resourceGroups/read`, which takes effect only when assigned at
+   resource group scope, so the assignment on the server failed with
+   `AuthorizationFailed`.
+5. **Regions said no.** eastus was restricted for Postgres on this subscription,
+   so the zone moved to centralus. Later centralus refused new AKS clusters
+   (`AKSCapacityHeavyUsage`), and the AKS proof ran in eastus2.
+6. **Teardown has a 14-day floor.** The backup vault's soft delete is always on
+   and has no purge, so a deleted backup instance blocks the policy and vault
+   from deleting until retention expires.
+7. **The first golden image failed its own hardening check.** Apport reset
+   `fs.suid_dumpable` at boot. Release `v2.0.1` of azure-vm-hardening removes
+   Apport and re-verifies after a reboot before publishing.
 
 ## How Azure differs from the AWS and GCP zones
 
@@ -158,6 +223,11 @@ oversights.
 
 ![Workload paved road](docs/workload-architecture.png)
 
+The prod VNet has no public IP or NAT. The private AKS cluster reaches its
+registry and Key Vault only through private endpoints, encrypts etcd with a key
+over the vault's private endpoint, and sends all other egress through the hub
+firewall in the base landing zone.
+
 A separate Terraform root (`workload/`, its own state) is the prod paved road, the
 hourly-billed layer that lands in the prod tier (`10.3`) and is deployed for a demo
 then destroyed on its own. It mirrors `aws-landing-zone/workload` (EKS to AKS),
@@ -184,6 +254,11 @@ it down first with `make destroy-workload`.
 ## Member portal (`portal/`)
 
 ![Member portal](docs/portal-architecture.png)
+
+Members reach the app only through Front Door and its WAF, which routes over
+Private Link to internal Container Apps in two regions. Both regions write
+through one SQL failover group listener, so the app never needs to know
+which database is primary. Partners come in through API Management.
 
 A second workload, shaped like the stack a member-services organization runs:
 **Front Door Premium with WAF** in front of **Container Apps in two regions**
@@ -237,10 +312,6 @@ make deploy            # apply with enable_firewall/bastion/private_endpoints = 
 # 2) Hourly layer, after reviewing the plan and cost:
 make deploy-network    # Azure Firewall + Bastion + UDR + private endpoints
 ```
-
-Through the `!` bash line (no interactive prompts) use the same commands with
-`-auto-approve` and ABSOLUTE `-chdir` paths, e.g.
-`terraform -chdir=/Users/jordannelson/azure-landing-zone/terraform apply -auto-approve -var enable_firewall=false ...`.
 
 ## Test (prove the guardrails deny)
 
@@ -316,6 +387,19 @@ until they gain an `azure/login` OIDC path, Azure applies run locally. Deliberat
 Checkov/Trivy trade-offs (public Key Vault for CMK creation, Standard-tier firewall
 without IDPS, software-protected key) are inline-skipped with reasons in the code.
 
+## What changes at production scale
+
+- **The AVM enterprise-scale module for the hierarchy and policy baseline,**
+  keeping only the inspection design, CMK wiring and CI integration as custom
+  code.
+- **A subscription-vending pipeline** in place of resource-group tiering, so the
+  Dev, Test, Prod and Sandbox assignments bind real subscriptions.
+- **Paid Defender plans and a SIEM,** so something watches behaviour, not just
+  configuration.
+- **Entra ID P2,** so PIM's just-in-time Prod access is live, not behind a flag.
+- **An Azure OIDC path in the shared CI workflows,** so applies run in the gated
+  pipeline instead of from a workstation.
+
 ## Docs
 
 - [docs/cis-mapping.md](docs/cis-mapping.md): CIS control → Terraform resource, with honest gaps.
@@ -387,7 +471,7 @@ running a full plan. Keep the default-deny firewall and existing RBAC.
 The pipeline publishes `hardened-ubuntu-2204` to the gallery using
 local release `azure-vm-hardening` tag `v2.0.1`. See
 [the build exemption ADR](docs/adr/0002-compute-image-exemption.md) for the two timed
-bootstrap exemptions and local tag resolution. Nothing has been pushed.
+bootstrap exemptions and local tag resolution.
 
 The `compute/` root creates a private `Standard_B2s` management VM with
 host encryption, Secure Boot, vTPM, SSH-key-only authentication, a system identity,
@@ -413,18 +497,18 @@ Gallery definitions are free; published versions use billed storage. `make destr
 removes compute before workload and base and then runs verification. Never leave
 a bake or VM session unattended.
 
-Resume commands (run from a shell with working Azure access):
+The full compute session, from the repo root:
 
 ```sh
-terraform -chdir=/Users/jordannelson/azure-landing-zone/terraform init -input=false
-terraform -chdir=/Users/jordannelson/azure-landing-zone/terraform plan -var=enable_firewall=false -var=enable_bastion=false -var=enable_private_endpoints=false -var=enable_fortigate=false -out=tfplan -input=false
-terraform -chdir=/Users/jordannelson/azure-landing-zone/terraform apply -input=false tfplan
-make -C /Users/jordannelson/azure-landing-zone build-image
-make -C /Users/jordannelson/azure-landing-zone test
-make -C /Users/jordannelson/azure-landing-zone deploy-compute
-make -C /Users/jordannelson/azure-landing-zone test-compute
-make -C /Users/jordannelson/azure-landing-zone destroy
-/Users/jordannelson/azure-landing-zone/scripts/verify-teardown.sh
+terraform -chdir=terraform init -input=false
+terraform -chdir=terraform plan -var=enable_firewall=false -var=enable_bastion=false -var=enable_private_endpoints=false -var=enable_fortigate=false -out=tfplan -input=false
+terraform -chdir=terraform apply -input=false tfplan
+make build-image
+make test
+make deploy-compute
+make test-compute
+make destroy
+scripts/verify-teardown.sh
 ```
 
 Always run the last two commands even when a build or proof fails. The image

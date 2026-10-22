@@ -51,10 +51,8 @@ migrate-state: ## Move every root's state into the new backend; fails on any res
 # up first and the HOURLY network layer (Azure Firewall + Bastion) is a separate,
 # explicitly confirmed step. Azure Firewall bills ~$1.25/hr and Bastion ~$0.19/hr.
 #
-# These targets use interactive apply. Through the `!` bash line (no interactive
-# prompts) run the same commands with -auto-approve and ABSOLUTE -chdir paths,
-# e.g. terraform -chdir=/Users/jordannelson/azure-landing-zone/terraform apply \
-#   -auto-approve $(CHEAP_FLAGS)  (see README "Deploy").
+# These targets use interactive apply. For a non-interactive shell, run the same
+# terraform commands with -auto-approve (see README "Deploy").
 
 .PHONY: deploy
 deploy: ## Stand up the FREE layer: MGs, Deny policies, CIS, identity, logging, Key Vault CMK
