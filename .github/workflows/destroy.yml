@@ -1,17 +1,12 @@
 name: Destroy (manual teardown)
 
 # Manual teardown: terraform destroy, then a post-destroy check that fails if any
-# hourly-billed resource survived (the teardown verification). Gated by the
-# `destroy` environment so a teardown is a recorded, approved act.
+# hourly-billed resource survived (the teardown verification). Bound to the
+# `destroy` environment, so a teardown is a recorded, approved act. Only that
+# environment's federated credential lets the job sign in as id-alz-gha-apply.
 #
-# INACTIVE for Azure, same reason as apply.yml: the shared tf-destroy.yml
-# configures AWS credentials only. Teardowns for this repo run locally
-# (make destroy, then scripts/verify-teardown.sh).
-#
-# ACTIVATE once platform-guardrails gains an azure/login OIDC path:
-#   1. add the azure/login step + inputs to tf-destroy.yml, cut a new tag
-#   2. create a `destroy` GitHub environment with a required reviewer
-#   3. bump the pin below and pass the Azure inputs
+# Same scope as apply.yml: ci-proof/ only. Operator-applied roots are torn down
+# locally (make destroy, then scripts/verify-teardown.sh).
 on:
   workflow_dispatch:
 
@@ -23,10 +18,12 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: jordann6/platform-guardrails/.github/workflows/tf-destroy.yml@v1.3.0
+    uses: jordann6/platform-guardrails/.github/workflows/tf-destroy.yml@c13311e2cc20b48af292d067e0b936f43116e257 # v1.8.1
     with:
-      terraform_dir: terraform
+      guardrails_ref: c13311e2cc20b48af292d067e0b936f43116e257
+      terraform_dir: ci-proof
       environment: destroy
-      aws_role_arn: ""
-      aws_region: ""
+      azure_client_id: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+      azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+      azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       check_only: false
