@@ -74,7 +74,7 @@ resource "azurerm_federated_identity_credential" "gha_plan_pull_request" {
   user_assigned_identity_id = azurerm_user_assigned_identity.gha_plan.id
   issuer                    = local.github_oidc_issuer
   audience                  = [local.github_oidc_audience]
-  subject                   = "repo:${var.github_repository}:pull_request"
+  subject                   = "${var.github_oidc_subject_prefix}:pull_request"
 }
 
 resource "azurerm_federated_identity_credential" "gha_plan_main" {
@@ -82,7 +82,7 @@ resource "azurerm_federated_identity_credential" "gha_plan_main" {
   user_assigned_identity_id = azurerm_user_assigned_identity.gha_plan.id
   issuer                    = local.github_oidc_issuer
   audience                  = [local.github_oidc_audience]
-  subject                   = "repo:${var.github_repository}:ref:refs/heads/main"
+  subject                   = "${var.github_oidc_subject_prefix}:ref:refs/heads/main"
 
   depends_on = [azurerm_federated_identity_credential.gha_plan_pull_request]
 }
@@ -117,7 +117,7 @@ resource "azurerm_federated_identity_credential" "gha_apply_prod_apply" {
   user_assigned_identity_id = azurerm_user_assigned_identity.gha_apply.id
   issuer                    = local.github_oidc_issuer
   audience                  = [local.github_oidc_audience]
-  subject                   = "repo:${var.github_repository}:environment:prod-apply"
+  subject                   = "${var.github_oidc_subject_prefix}:environment:prod-apply"
 }
 
 resource "azurerm_federated_identity_credential" "gha_apply_destroy" {
@@ -125,7 +125,7 @@ resource "azurerm_federated_identity_credential" "gha_apply_destroy" {
   user_assigned_identity_id = azurerm_user_assigned_identity.gha_apply.id
   issuer                    = local.github_oidc_issuer
   audience                  = [local.github_oidc_audience]
-  subject                   = "repo:${var.github_repository}:environment:destroy"
+  subject                   = "${var.github_oidc_subject_prefix}:environment:destroy"
 
   depends_on = [azurerm_federated_identity_credential.gha_apply_prod_apply]
 }
