@@ -87,6 +87,14 @@ real deploy, image bake or teardown in Azure.
 7. **The first golden image failed its own hardening check.** Apport reset
    `fs.suid_dumpable` at boot. Release `v2.0.1` of azure-vm-hardening removes
    Apport and re-verifies after a reboot before publishing.
+8. **The first CI sign-in was rejected.** `azure/login` failed with
+   `AADSTS700213: No matching federated identity record found for presented
+   assertion subject 'repo:jordann6@196278615/azure-landing-zone@1407358203:ref:refs/heads/main'`.
+   GitHub issues this repo's tokens with the immutable subject (owner and repo
+   IDs), and Entra matches a federated credential's subject exactly. The AWS zone
+   had already hit the same mismatch; the Azure credentials were still written
+   from the old name-based pattern. They now trust the immutable form, which also
+   means a deleted and recreated repo with the same name cannot inherit the trust.
 
 ## How Azure differs from the AWS and GCP zones
 
@@ -126,7 +134,7 @@ layout and the reusable `landing-zone` spoke module are in
 
 ## Parity with the AWS and GCP zones
 
-Status as of 2026-10-06. "Built" means code merged or committed. "Proven" means a
+Status as of 2026-10-26. "Built" means code merged or committed. "Proven" means a
 deploy-test-destroy session passed. Where a cell says pending, nothing was run. AKS and ACR on azurerm 4.x were proven 2026-10-06 in eastus2 (centralus refused new AKS clusters with `AKSCapacityHeavyUsage`): clean post-apply plan, private VNet-integrated cluster with private KMS, ACR behind its private endpoint with CMK and the cache rule.
 
 | Capability | AWS | Azure | GCP |
@@ -140,6 +148,8 @@ deploy-test-destroy session passed. Where a cell says pending, nothing was run. 
 | Threat detection | GuardDuty | Not enabled, see [ADR-0004](docs/adr/0004-detection-tier.md) | SCC, activation is manual |
 | Compute baseline | Guardrails live, compute proven 2026-10-06 | Image and VM proven 2026-10-05 | Code complete, live run pending |
 | Dedicated state backend | Built | Built | Built |
+| Gated CI apply and destroy | Proven 2026-10-15 on the full hourly stack (196 resources) | Proven 2026-10-26 on the `ci-proof/` root only, see [CI](#ci) | Shared workflows support WIF, activation pending |
+| Drift detection | Daily on the accounts root, proven 2026-10-26 | Not wired | Not wired |
 | Secrets scanner | Live | Identity, alert and positive control proven 2026-10-06 (metadata-only role, 403 on value read, NearExpiry alert); the Rails scanner itself is not run here | None |
 | Warm standby | Not started | Member portal only: two-region app and SQL failover group, planned failovers measured 2026-10-03. Prod LZ tier has in-region zone HA and geo-redundant backup only | None |
 
@@ -284,6 +294,9 @@ shared account, and the trade-offs: [docs/adr/0001-dedicated-state-backend.md](d
 | Access and transport | HTTPS only, TLS 1.2, no public blobs, shared keys disabled (Entra ID + RBAC only) |
 | Locking | Native blob lease in the azurerm backend |
 
+`bootstrap/` also owns the two CI identities and `rg-alz-ci` (see [CI](#ci)), so
+the trust CI runs on is only ever changed by an operator apply.
+
 One-time move off the old backend:
 
 ```bash
@@ -378,14 +391,49 @@ clean. Watch the `Total Regional vCPUs` quota if you also run the VM-Series lab 
 
 ## CI
 
-Static gates run through the shared [platform-guardrails](https://github.com/jordann6/platform-guardrails)
+Static gates run on every root through the shared [platform-guardrails](https://github.com/jordann6/platform-guardrails)
 toolkit (`.github/workflows/guardrails.yml` → `tf-ci.yml@v1.3.0`): full-history
 gitleaks, `fmt` + `validate`, lockfile-committed assertion, tflint, Checkov, and
-Trivy config. The credentialed `apply` / `destroy` / `ttl-guard` workflows are
-wired but **inactive**: the shared reusable workflows authenticate to AWS only, so
-until they gain an `azure/login` OIDC path, Azure applies run locally. Deliberate
-Checkov/Trivy trade-offs (public Key Vault for CMK creation, Standard-tier firewall
-without IDPS, software-protected key) are inline-skipped with reasons in the code.
+Trivy config. Deliberate Checkov/Trivy trade-offs (public Key Vault for CMK
+creation, Standard-tier firewall without IDPS, software-protected key) are
+inline-skipped with reasons in the code.
+
+The credentialed workflows sign in through GitHub OIDC with two user-assigned
+identities created in `bootstrap/ci-identities.tf`. No client secret exists.
+
+| Identity | Federated credential subjects | Azure access |
+|---|---|---|
+| `id-alz-gha-plan` | `pull_request`, `ref:refs/heads/main` | Reader on the subscription |
+| `id-alz-gha-apply` | `environment:prod-apply`, `environment:destroy` | Contributor on `rg-alz-ci` only |
+
+Subjects use GitHub's immutable prefix, `repo:jordann6@196278615/azure-landing-zone@1407358203`.
+Both identities also hold Storage Blob Data Contributor on the state container,
+with an ABAC condition: reads are open (remote state, refresh), but write, delete
+and lease are limited to `azure-landing-zone/ci-proof.terraform.tfstate`, so a
+pull request that plans hostile Terraform cannot overwrite another root's state.
+The apply identity cannot create role assignments, and both identities live in an
+operator-applied root, so CI can never rewrite its own trust.
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `apply.yml` | Dispatch, main | Plans `ci-proof/` as the plan identity, runs the destroy guard, then waits on the `prod-apply` environment and applies the saved plan as the apply identity |
+| `destroy.yml` | Dispatch, main | Destroys `ci-proof/` behind the `destroy` environment, then fails if anything hourly survived |
+| `ttl-guard.yml` | Hourly, or dispatch | Read-only check across `terraform/`, `workload/`, `compute/` and `ci-proof/` that fails while any of them holds an hourly-billed resource |
+
+All three pin platform-guardrails `c13311e` (v1.8.1) and pass the same SHA as
+`guardrails_ref`. Both environments require a reviewer and allow only `main`.
+Client, tenant and subscription IDs come from repo variables.
+
+Proven 2026-10-26: a [gated apply](https://github.com/jordann6/azure-landing-zone/actions/runs/40347650144)
+built 4 resources after approval, a [gated destroy](https://github.com/jordann6/azure-landing-zone/actions/runs/40348437153)
+removed all 4 with the hourly check clean, and the [TTL guard](https://github.com/jordann6/azure-landing-zone/actions/runs/40348754503)
+passed on all four roots.
+
+Scope: CI applies only `ci-proof/`, a free root (isolated VNet, subnet, deny-all
+NSG) in `rg-alz-ci`. Governance, the workload and compute stay operator-applied.
+Moving `workload/` behind CI would need runner access through its Key Vault
+firewall and a constrained way to create its eight role assignments; `compute/`
+needs a gallery image from the base root. Neither is built.
 
 ## What changes at production scale
 
