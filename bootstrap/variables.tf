@@ -33,8 +33,8 @@ variable "network_default_action" {
   }
 }
 
-variable "github_repository" {
-  description = "owner/repo whose GitHub Actions OIDC tokens the CI identities trust."
+variable "github_oidc_subject_prefix" {
+  description = "Subject prefix GitHub puts on this repo's OIDC tokens. GitHub now issues the immutable form, repo:OWNER@OWNER_ID/REPO@REPO_ID, so a deleted and recreated repo with the same name cannot inherit the trust. Read it with: gh api repos/OWNER/REPO/actions/oidc/customization/sub"
   type        = string
-  default     = "jordann6/azure-landing-zone"
+  default     = "repo:jordann6@196278615/azure-landing-zone@1407358203"
 }
