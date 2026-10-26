@@ -1,24 +1,20 @@
 name: Apply (gated)
 
-# Reviewer-gated apply: the just-in-time-to-prod control in CI. Plans read-only,
-# runs the destroy guard, then pauses on the `prod-apply` environment for a
-# required reviewer before applying the exact saved plan. See tf-apply.yml in
-# platform-guardrails.
+# Reviewer-gated apply: the just-in-time-to-prod control in CI. The plan job
+# signs in as the read-scoped id-alz-gha-plan identity, plans, and runs the
+# destroy guard. The apply job is bound to the `prod-apply` environment, pauses
+# for a required reviewer, then signs in as id-alz-gha-apply and applies the
+# exact saved plan. See tf-apply.yml in platform-guardrails.
 #
-# INACTIVE for Azure. The shared tf-apply.yml authenticates with
-# aws-actions/configure-aws-credentials and has no azure/login step yet, so the
-# credentialed jobs cannot mint an Azure token. Credentialed applies for this
-# repo run locally (az login, then terraform apply against the azurerm backend).
+# Only ci-proof/ is applied here. The apply identity is Contributor on rg-alz-ci
+# and nothing else; governance (terraform/), the workload and compute stay
+# operator-applied, and bootstrap/ owns both identities, so CI can never rewrite
+# its own trust.
 #
-# ACTIVATE once platform-guardrails gains an azure/login OIDC path:
-#   1. add azure_client_id / azure_tenant_id / azure_subscription_id inputs and
-#      an azure/login step to tf-apply.yml, cut a new tag
-#   2. create a user-assigned managed identity with a GitHub federated credential
-#   3. create a `prod-apply` GitHub environment with a required reviewer
-#   4. bump the pin below and pass the Azure inputs, then add a push trigger
+# Dispatch from main: the plan identity trusts pull requests and ref main only.
 #
-# Kept on workflow_dispatch only so it never auto-fires. aws_role_arn is left
-# empty, which makes the AWS credential step self-skip.
+# Pinned to one platform-guardrails SHA with the tag in a comment, and the same
+# SHA is passed as guardrails_ref so the scripts match the reviewed workflow.
 on:
   workflow_dispatch:
 
@@ -30,10 +26,12 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: jordann6/platform-guardrails/.github/workflows/tf-apply.yml@v1.3.0
+    uses: jordann6/platform-guardrails/.github/workflows/tf-apply.yml@c13311e2cc20b48af292d067e0b936f43116e257 # v1.8.1
     with:
-      terraform_dir: terraform
+      guardrails_ref: c13311e2cc20b48af292d067e0b936f43116e257
+      terraform_dir: ci-proof
       environment: prod-apply
-      plan_role_arn: ""
-      apply_role_arn: ""
-      aws_region: ""
+      azure_plan_client_id: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+      azure_apply_client_id: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+      azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+      azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}

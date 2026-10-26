@@ -17,9 +17,10 @@ fmt: ## Terraform format check
 	terraform fmt -check -recursive bootstrap
 	terraform fmt -check -recursive observability
 	terraform fmt -check -recursive secrets
+	terraform fmt -check -recursive ci-proof
 
 .PHONY: validate
-validate: ## Terraform init (no backend) + validate, all seven roots
+validate: ## Terraform init (no backend) + validate, all eight roots
 	terraform -chdir=terraform init -backend=false && terraform -chdir=terraform validate
 	terraform -chdir=workload init -backend=false && terraform -chdir=workload validate
 	terraform -chdir=portal init -backend=false && terraform -chdir=portal validate
@@ -27,6 +28,7 @@ validate: ## Terraform init (no backend) + validate, all seven roots
 	terraform -chdir=bootstrap init -backend=false && terraform -chdir=bootstrap validate
 	terraform -chdir=observability init -backend=false && terraform -chdir=observability validate
 	terraform -chdir=secrets init -backend=false && terraform -chdir=secrets validate
+	terraform -chdir=ci-proof init -backend=false && terraform -chdir=ci-proof validate
 
 .PHONY: diagram
 diagram: ## Regenerate docs/architecture.png, workload-architecture.png, portal-architecture.png

@@ -13,8 +13,8 @@ on:
 #
 # Version pins: the reusable-workflow pin here (tf-ci) references v1.3.0, the
 # same tag the AWS repo pins. The credentialed apply/destroy/ttl-guard live in
-# their own files and stay inactive until platform-guardrails grows an
-# azure/login OIDC path (its tf-plan/apply/destroy configure AWS creds only).
+# their own files, pinned to v1.8.1 by SHA, and sign in through Azure OIDC with
+# the identities bootstrap/ creates.
 permissions:
   contents: read
 
@@ -31,7 +31,7 @@ jobs:
       skip_policy: true
 
   # One static job per Terraform root: base (above), the prod workload, the
-  # member portal, compute, and the state backend. Same gates, same pin, same reason for skip_policy.
+  # member portal, compute, the state backend, and the CI proof root. Same gates, same pin, same reason for skip_policy.
   static-workload:
     uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
     with:
@@ -66,6 +66,12 @@ jobs:
     uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
     with:
       terraform_dir: bootstrap
+      skip_policy: true
+
+  static-ci-proof:
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    with:
+      terraform_dir: ci-proof
       skip_policy: true
 
   # The portal app's unit tests (no database or Azure needed).

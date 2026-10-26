@@ -1,37 +1,36 @@
 name: TTL guard
 
-# Scheduled watch for a forgotten teardown. In check_only mode it reads live
-# state and fails if any hourly-billed resource is still standing; the red
-# scheduled run and its notification are the alarm. It changes nothing.
+# Hourly watch for a forgotten teardown. In check_only mode it reads live state
+# and fails if any hourly-billed resource is still standing; the red scheduled
+# run and its notification are the alarm. It changes nothing and signs in as the
+# read-scoped id-alz-gha-plan identity, which trusts ref main (what schedule and
+# workflow_dispatch runs on main present).
 #
-# The hourly resources that matter here are Azure Firewall (~$1.25/hr) and
-# Bastion (~$0.19/hr), both gated behind enable_firewall / enable_bastion.
-#
-# INACTIVE for Azure, same reason as apply.yml / destroy.yml: the shared
-# tf-destroy.yml configures AWS credentials only. Until an azure/login path
-# exists, the local scripts/verify-teardown.sh is the standing-resource alarm.
-#
-# ACTIVATE once platform-guardrails gains an azure/login OIDC path:
-#   1. add the azure/login step + inputs to tf-destroy.yml, cut a new tag
-#   2. bump the pin below, pass the Azure inputs
-#   3. uncomment the schedule trigger
+# Every root that can hold hourly resources is watched, operator-applied or not:
+# terraform/ (Azure Firewall ~$1.25/hr, Bastion ~$0.19/hr), workload/ (AKS,
+# private endpoints), compute/ (the management VM) and ci-proof/.
 on:
+  schedule:
+    - cron: "23 * * * *"
   workflow_dispatch:
-  # ACTIVATE: hourly check for standing billable resources.
-  # schedule:
-  #   - cron: "0 * * * *"
 
 permissions:
   contents: read
 
 jobs:
   ttl:
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [terraform, workload, compute, ci-proof]
     permissions:
       contents: read
       id-token: write
-    uses: jordann6/platform-guardrails/.github/workflows/tf-destroy.yml@v1.3.0
+    uses: jordann6/platform-guardrails/.github/workflows/tf-destroy.yml@c13311e2cc20b48af292d067e0b936f43116e257 # v1.8.1
     with:
-      terraform_dir: terraform
-      aws_role_arn: ""
-      aws_region: ""
+      guardrails_ref: c13311e2cc20b48af292d067e0b936f43116e257
+      terraform_dir: ${{ matrix.root }}
+      azure_client_id: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+      azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+      azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       check_only: true

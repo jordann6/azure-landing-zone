@@ -32,3 +32,9 @@ variable "network_default_action" {
     error_message = "network_default_action must be Allow or Deny."
   }
 }
+
+variable "github_repository" {
+  description = "owner/repo whose GitHub Actions OIDC tokens the CI identities trust."
+  type        = string
+  default     = "jordann6/azure-landing-zone"
+}
