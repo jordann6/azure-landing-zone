@@ -136,6 +136,29 @@ variable "enable_pim" {
   description = "Create PIM eligible (JIT) role assignments for the prod-write persona. Requires Entra ID P2. Only takes effect when create_entra_identity is true."
 }
 
+variable "enable_conditional_access" {
+  type        = bool
+  default     = false
+  description = "Create the Conditional Access MFA baseline (block legacy auth, MFA for privileged personas, MFA for all users). Needs Entra ID P1 or P2 and Security Defaults turned off. Tenant-wide, so it defaults off."
+}
+
+variable "conditional_access_state" {
+  type        = string
+  default     = "enabledForReportingButNotEnforced"
+  description = "State of the Conditional Access policies. Report-only by default; set enabled to enforce after reading the sign-in logs."
+
+  validation {
+    condition     = contains(["enabled", "disabled", "enabledForReportingButNotEnforced"], var.conditional_access_state)
+    error_message = "conditional_access_state must be enabled, disabled or enabledForReportingButNotEnforced."
+  }
+}
+
+variable "conditional_access_excluded_group_ids" {
+  type        = set(string)
+  default     = []
+  description = "Extra Entra group object IDs excluded from the MFA policies, on top of the break-glass persona."
+}
+
 variable "kv_admin_object_id" {
   type        = string
   default     = ""
