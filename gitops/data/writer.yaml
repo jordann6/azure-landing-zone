@@ -1,0 +1,67 @@
+# One sequenced insert per second, each acknowledged write logged as
+# {"evt":"ack","seq":N,...}. The restore drill compares the last ack before the
+# simulated loss with the highest sequence the restored database holds.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slo-writer
+  labels:
+    app: slo-writer
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: slo-writer
+  template:
+    metadata:
+      labels:
+        app: slo-writer
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: slo-data
+      terminationGracePeriodSeconds: 15
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: writer
+          image: slo-demo
+          env:
+            - name: MODE
+              value: writer
+            - name: DB_HOST
+              value: postgres.slo-data.svc.cluster.local
+            - name: DB_PASSWORD_FILE
+              value: /mnt/secrets/slo-data-db-password
+          ports:
+            - name: metrics
+              containerPort: 9090
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: secrets
+              mountPath: /mnt/secrets
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: slo-data-db

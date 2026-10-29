@@ -95,10 +95,13 @@ variable "aks_node_vm_size" {
   default     = "Standard_D2s_v3"
 }
 
+# Three, not two. On 2026-10-29 two D2s_v3 nodes were CPU-starved: the add-ons
+# alone requested about 1.95 of the 1.9 allocatable vCPU per node, and the AKS
+# Backup extension's Helm install timed out until a third node joined.
 variable "aks_node_count" {
   description = "Node pool node count."
   type        = number
-  default     = 2
+  default     = 3
 }
 
 # ── Data tier ─────────────────────────────────────────────────────────────────
@@ -138,4 +141,47 @@ variable "backup_immutability_locked" {
   description = "false keeps the vault immutability policy unlocked so the demo can be torn down; production locks it for irreversible WORM. Mirrors the AWS Vault Lock changeable_for_days knob."
   type        = bool
   default     = false
+}
+
+# ── Feature flags ─────────────────────────────────────────────────────────────
+variable "enable_postgres" {
+  description = "PostgreSQL flexible server with its private DNS, Key Vault credential, backup role and backup instance (the vault and policy stay, empty and free). Off for the SRE demo session, which keeps its state in the cluster and avoids the vault's 14-day soft-delete floor."
+  type        = bool
+  default     = true
+}
+
+variable "enable_sre_demo" {
+  description = "SRE demo layer (HOURLY usage): Flux GitOps extension and configuration, managed Prometheus (Azure Monitor workspace, DCE, DCR), SLO rule groups, the in-cluster Grafana and data identities, and the egress those need."
+  type        = bool
+  default     = false
+}
+
+variable "enable_aks_backup" {
+  description = "AKS Backup, operational tier (snapshots and storage bill by usage): a demo-only backup vault with soft delete off, the backup extension and its private storage account, trusted access, policy and a backup instance for the stateful namespace. Requires enable_sre_demo."
+  type        = bool
+  default     = false
+}
+
+variable "gitops_repo_url" {
+  description = "Public Git repository Flux reads."
+  type        = string
+  default     = "https://github.com/jordann6/azure-landing-zone"
+}
+
+variable "gitops_branch" {
+  description = "Branch Flux tracks. A pushed feature branch works for the proof, so it does not wait on a merge."
+  type        = string
+  default     = "main"
+}
+
+variable "aks_egress_broad_service_tag" {
+  description = "Rollback switch. true restores the pre-2026-10-29 AzureCloud.<region> network rule (1194, 9000, 443) in rcg-aks-egress; false allows only the documented AzureMonitor:443 rule."
+  type        = bool
+  default     = false
+}
+
+variable "slo_alert_runbook_base_url" {
+  description = "Base URL for runbook links in alert annotations. Null derives it from gitops_repo_url and gitops_branch, so the links resolve on the branch the cluster runs (a hardcoded main 404s until merge)."
+  type        = string
+  default     = null
 }

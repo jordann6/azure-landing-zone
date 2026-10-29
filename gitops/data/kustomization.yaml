@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: slo-data
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - secretproviderclass.yaml
+  - networkpolicy.yaml
+  - postgres.yaml
+  - writer.yaml
+  - podmonitor.yaml
+images:
+  # postgres:16.14, mirrored by digest to ghcr.io/jordann6/postgres (the
+  # mirror-postgres job in sre-images.yml) and imported into ACR from there.
+  # ACR imports straight from Docker Hub and ECR Public both hit 429s.
+  - name: postgres
+    newName: ${ACR_LOGIN_SERVER}/postgres
+    digest: sha256:95206741a5b214807675e14165369d05b93a9cf692223b616d07cca227e74b0b
+  - name: slo-demo
+    newName: ${ACR_LOGIN_SERVER}/slo-demo
+    digest: sha256:a2e1f8a4f986578e1f45967b270ac8a95606dab062fdba852f8462b143ec8bc4

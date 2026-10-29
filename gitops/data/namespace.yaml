@@ -1,0 +1,8 @@
+# Owned by the `data` kustomization (not `infra`), so suspending `data` is enough
+# to stop Flux recreating it during the restore drill.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: slo-data
+  labels:
+    pod-security.kubernetes.io/enforce: restricted

@@ -1,0 +1,17 @@
+# Internal load balancer in the prod VNet: no public IP. Reached from the hub
+# management VM over the peering, which is the far end of the Bastion SSH port
+# forward in docs/runbooks/grafana-access.md.
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+spec:
+  type: LoadBalancer
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

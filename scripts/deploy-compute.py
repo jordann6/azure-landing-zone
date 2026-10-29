@@ -26,6 +26,15 @@ def main():
             if actions not in (["no-op"], ["read"], ["create"]):
                 raise RuntimeError(f"Review non-additive change before deploying: {resource['address']} {actions}")
         subprocess.run(TF + ["apply", "-input=false", "tfplan"], check=True)
+        # Opt-in for sessions that SSH through Bastion (docs/runbooks/grafana-access.md).
+        # Default stays as before: the private key dies with the temp directory.
+        keep = os.environ.get("KEEP_SSH_KEY")
+        if keep:
+            target = Path(keep).expanduser()
+            target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            target.write_bytes(key.read_bytes())
+            target.chmod(0o600)
+            print(f"Kept the session SSH key at {target}; delete it at teardown.")
 
 
 if __name__ == "__main__":

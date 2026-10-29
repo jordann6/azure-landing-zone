@@ -30,11 +30,16 @@ validate: ## Terraform init (no backend) + validate, all eight roots
 	terraform -chdir=secrets init -backend=false && terraform -chdir=secrets validate
 	terraform -chdir=ci-proof init -backend=false && terraform -chdir=ci-proof validate
 
+.PHONY: check-destroy-order
+check-destroy-order: ## Graph check: the cluster and its extensions are destroyed before the network they need
+	python3 scripts/check-destroy-order.py
+
 .PHONY: diagram
-diagram: ## Regenerate docs/architecture.png, workload-architecture.png, portal-architecture.png
+diagram: ## Regenerate docs/architecture.png, workload-architecture.png, portal-architecture.png, sre-demo-architecture.png
 	python3 docs/diagram.py
 	python3 docs/workload.py
 	python3 docs/portal.py
+	python3 docs/sre-demo.py
 
 # ---- state backend (standing, never part of destroy) -------------------------
 # bootstrap/ owns the storage account every root keeps state in. One-time move
@@ -148,6 +153,16 @@ destroy-secrets: ## Remove the scanner identity, alert and control secret before
 .PHONY: test-flow-logs
 test-flow-logs: ## Prove VNet flow logs are configured and delivering (needs enable_flow_logs and time for analytics lag)
 	scripts/test-flow-logs.sh
+
+.PHONY: drill-gitops drill-slo drill-restore
+drill-gitops: ## SRE demo: Flux Compliant, manual drift reverted, a pushed commit converges (timed)
+	scripts/drill-gitops.sh
+
+drill-slo: ## SRE demo: inject failure, SloFastBurn fires and pages, runbook diagnosis, resolve (timed)
+	scripts/drill-slo.sh
+
+drill-restore: ## SRE demo, DESTRUCTIVE: delete and restore slo-data from AKS Backup (needs CONFIRM=<cluster>/slo-data)
+	scripts/drill-restore.sh
 
 .PHONY: test-drift
 test-drift: ## Prove drift.yml on ci-proof/: clean run, CLI tag change opens a drift issue, revert closes it

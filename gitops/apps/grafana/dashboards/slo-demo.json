@@ -1,0 +1,377 @@
+{
+  "uid": "slo-demo",
+  "title": "slo-demo SLO",
+  "tags": [
+    "slo",
+    "sre-demo"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "editable": false,
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Request rate",
+      "description": "Requests per second the SLI counts (probes and scrapes excluded).",
+      "datasource": {
+        "type": "grafana-azureprometheus-datasource",
+        "uid": "amw"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azureprometheus-datasource",
+            "uid": "amw"
+          },
+          "expr": "slo:requests:rate5m",
+          "legendFormat": "5m"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Error ratio (5xx / all)",
+      "description": "Dashed lines: the 0.5% budget and the 7.2% fast-burn error rate.",
+      "datasource": {
+        "type": "grafana-azureprometheus-datasource",
+        "uid": "amw"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azureprometheus-datasource",
+            "uid": "amw"
+          },
+          "expr": "slo:errors:ratio_rate5m",
+          "legendFormat": "5m"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-azureprometheus-datasource",
+            "uid": "amw"
+          },
+          "expr": "slo:errors:ratio_rate1h",
+          "legendFormat": "1h"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.005
+              },
+              {
+                "color": "red",
+                "value": 0.07200000000000001
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "p95 latency",
+      "description": "",
+      "datasource": {
+        "type": "grafana-azureprometheus-datasource",
+        "uid": "amw"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azureprometheus-datasource",
+            "uid": "amw"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(slo_demo_request_duration_seconds_bucket{namespace=\"slo-demo\"}[5m])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Burn rate (x budget)",
+      "description": "Fast burn pages when both 1h and 5m exceed 14.4. Slow burn tickets when both 6h and 30m exceed 6.",
+      "datasource": {
+        "type": "grafana-azureprometheus-datasource",
+        "uid": "amw"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azureprometheus-datasource",
+            "uid": "amw"
+          },
+          "expr": "slo:errors:ratio_rate5m / 0.005",
+          "legendFormat": "5m"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-azureprometheus-datasource",
+            "uid": "amw"
+          },
+          "expr": "slo:errors:ratio_rate1h / 0.005",
+          "legendFormat": "1h"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-azureprometheus-datasource",
+            "uid": "amw"
+          },
+          "expr": "slo:errors:ratio_rate30m / 0.005",
+          "legendFormat": "30m"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "grafana-azureprometheus-datasource",
+            "uid": "amw"
+          },
+          "expr": "slo:errors:ratio_rate6h / 0.005",
+          "legendFormat": "6h"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 6
+              },
+              {
+                "color": "red",
+                "value": 14.4
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Injected fault",
+      "description": "The drill's failure switch, read from the slo-demo-fault ConfigMap.",
+      "datasource": {
+        "type": "grafana-azureprometheus-datasource",
+        "uid": "amw"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azureprometheus-datasource",
+            "uid": "amw"
+          },
+          "expr": "max(slo_demo_fault_percent{namespace=\"slo-demo\"})",
+          "legendFormat": "fail %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Writer: last acknowledged sequence",
+      "description": "Durable writes in slo-data. A flat line is the failure boundary in the restore drill.",
+      "datasource": {
+        "type": "grafana-azureprometheus-datasource",
+        "uid": "amw"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azureprometheus-datasource",
+            "uid": "amw"
+          },
+          "expr": "max(slo_writer_last_ack_seq{namespace=\"slo-data\"})",
+          "legendFormat": "seq"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": []
+  }
+}

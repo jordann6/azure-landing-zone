@@ -22,8 +22,14 @@ resource "azurerm_bastion_host" "hub" {
   name                = "bas-${var.project}-hub"
   location            = azurerm_resource_group.hub.location
   resource_group_name = azurerm_resource_group.hub.name
-  sku                 = "Basic"
+  sku                 = var.bastion_sku
   tags                = local.tags
+
+  # Standard adds native-client tunneling, which the SRE demo uses for an SSH
+  # port forward through the management VM to the in-cluster Grafana
+  # (docs/runbooks/grafana-access.md). Basic stays the default: browser-only
+  # admin access and the lower hourly rate.
+  tunneling_enabled = var.bastion_sku == "Standard"
 
   ip_configuration {
     name                 = "bastion-ipconfig"

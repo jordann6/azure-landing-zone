@@ -58,6 +58,34 @@ resource "azurerm_role_assignment" "aks_kv_kms_pe" {
   principal_id       = azurerm_user_assigned_identity.aks.principal_id
 }
 
+# The AKS resource provider checks, as the cluster identity, that it can read the
+# vault (management plane) and its keys before it creates a KMS cluster. Crypto
+# User grants only the key data actions, and the vault read otherwise came only
+# from the custom role above, which is created seconds earlier and replicates
+# slowly. On 2026-10-29 a fresh deploy failed twice, 13 minutes apart, with
+# "Access to KeyVault ... was denied when using KMS". The built-in Reader on the
+# vault gives that read directly.
+resource "azurerm_role_assignment" "aks_kv_reader" {
+  scope                = azurerm_key_vault.workload.id
+  role_definition_name = "Reader"
+  principal_id         = azurerm_user_assigned_identity.aks.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Role assignments for a brand-new identity are eventually consistent. Give them
+# time before the cluster create validates them, so a fresh deploy does not fail
+# on propagation.
+resource "time_sleep" "aks_rbac_propagation" {
+  create_duration = "5m"
+
+  depends_on = [
+    azurerm_role_assignment.aks_network,
+    azurerm_role_assignment.aks_kms,
+    azurerm_role_assignment.aks_kv_kms_pe,
+    azurerm_role_assignment.aks_kv_reader,
+  ]
+}
+
 resource "azurerm_kubernetes_cluster" "prod" {
   # checkov:skip=CKV_AZURE_170:Free tier (no uptime-SLA paid SKU) keeps the timed demo inside the cost ceiling; the paid SKU is the production upgrade.
   # checkov:skip=CKV_AZURE_232:Single node pool runs the workloads, mirroring the one AWS EKS managed node group; a dedicated system pool is the production split.
@@ -163,15 +191,53 @@ resource "azurerm_kubernetes_cluster" "prod" {
     log_analytics_workspace_id = local.law_id
   }
 
+  # Azure Disk CSI driver and snapshot controller, stated rather than left to
+  # defaults: AKS Backup snapshots persistent volumes through them, and the demo
+  # StorageClass provisions CMK-encrypted disks through the driver.
+  storage_profile {
+    disk_driver_enabled         = true
+    file_driver_enabled         = true
+    blob_driver_enabled         = false
+    snapshot_controller_enabled = true
+  }
+
+  # Managed Prometheus (the ama-metrics add-on), on with the SRE demo layer. It
+  # scrapes the azmonitoring.coreos.com ServiceMonitors in gitops/ and remote
+  # writes to the Azure Monitor workspace through the DCE and DCR in
+  # sre-monitoring.tf.
+  dynamic "monitor_metrics" {
+    for_each = var.enable_sre_demo ? [1] : []
+    content {}
+  }
+
   # The UDR egress route, the network role, and the etcd-key access must all exist
   # before the cluster provisions (outbound_type=UDR needs the route in place; the
   # firewall must already allow AKS's required FQDNs, see aks-egress-firewall.tf).
+  #
+  # The same edges order the teardown: Terraform destroys in reverse dependency
+  # order, so everything listed here outlives the cluster and everything built on
+  # it (the Flux and backup extensions, the Flux configuration, the backup
+  # instance). On 2026-10-29 the peerings and the Key Vault private endpoint had
+  # no edge to the cluster and went first. The 0.0.0.0/0 route then pointed at a
+  # firewall the spoke could no longer reach, the nodes went NotReady, and the
+  # Flux configuration and backup instance deletes hung for 30 minutes and
+  # failed. The peerings, the private endpoints with their DNS links, and every
+  # rule collection group the cluster's egress uses are therefore listed too.
   depends_on = [
     azurerm_subnet_route_table_association.aks,
+    azurerm_virtual_network_peering.prod_to_hub,
+    azurerm_virtual_network_peering.hub_to_prod,
+    azurerm_private_endpoint.kv,
+    azurerm_private_endpoint.acr,
+    azurerm_private_dns_zone_virtual_network_link.pe,
     azurerm_role_assignment.aks_network,
     azurerm_role_assignment.aks_kms,
     azurerm_role_assignment.aks_kv_kms_pe,
+    azurerm_role_assignment.aks_kv_reader,
+    time_sleep.aks_rbac_propagation,
     azurerm_firewall_policy_rule_collection_group.aks_egress,
+    azurerm_firewall_policy_rule_collection_group.aks_addons,
+    azurerm_firewall_policy_rule_collection_group.sre,
   ]
 }
 
@@ -201,4 +267,26 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
     category = "AllMetrics"
     enabled  = false
   }
+}
+
+# Nodes pull application images from the private registry. Without this the
+# kubelet identity has no AcrPull and every pod pulling from ACR fails with
+# ImagePullBackOff; the 2026-10-06 proof never pulled an app image, so it did
+# not surface then.
+resource "azurerm_role_assignment" "aks_acr_pull" {
+  scope                = azurerm_container_registry.app.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_kubernetes_cluster.prod.kubelet_identity[0].object_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Dynamically provisioned data disks use the same disk encryption set as the OS
+# disks (the cmk-disk StorageClass in gitops/). The disk CSI driver runs as the
+# cluster identity, which must be able to read the DES it attaches.
+resource "azurerm_role_assignment" "aks_des_reader" {
+  count                = local.sre_count
+  scope                = azurerm_disk_encryption_set.aks.id
+  role_definition_name = "Reader"
+  principal_id         = azurerm_user_assigned_identity.aks.principal_id
+  principal_type       = "ServicePrincipal"
 }

@@ -1,0 +1,51 @@
+# Steady synthetic traffic, so the SLI always has a denominator. At 20 rps the
+# 1h fast-burn window crosses 14.4x budget (7.2% errors) within minutes of a 20%
+# injected failure.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slo-loadgen
+  labels:
+    app: slo-loadgen
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slo-loadgen
+  template:
+    metadata:
+      labels:
+        app: slo-loadgen
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: loadgen
+          image: slo-demo
+          env:
+            - name: MODE
+              value: loadgen
+            - name: RPS
+              value: "25"
+            - name: TARGET_URL
+              value: http://slo-demo.slo-demo.svc.cluster.local/api/work
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

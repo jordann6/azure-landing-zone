@@ -1,3 +1,8 @@
+# The vault and its Postgres policy stay outside enable_postgres on purpose: an
+# empty vault costs nothing, and gating it would plan a destroy of the existing
+# vault (soft delete On, with a 14-day floor) whenever Postgres is off. Only the
+# server, its backup role and the backup instance follow the flag.
+#
 # Azure Backup with soft delete and geo-redundant storage, protecting the Postgres
 # server. Soft delete makes a deleted backup recoverable within the retention window
 # (tamper-resistance), and geo-redundancy gives the cross-region copy. Mirrors
@@ -45,6 +50,8 @@ resource "azurerm_data_protection_backup_policy_postgresql_flexible_server" "pro
 # effect at RG scope or above; a server-scoped assignment leaves the vault unable
 # to read the RG and the backup configuration fails with AuthorizationFailed.
 resource "azurerm_role_assignment" "backup_pg" {
+  count = local.pg_count
+
   scope                = azurerm_resource_group.prod.id
   role_definition_name = "PostgreSQL Flexible Server Long Term Retention Backup Role"
   principal_id         = azurerm_data_protection_backup_vault.prod.identity[0].principal_id
@@ -54,24 +61,28 @@ resource "azurerm_role_assignment" "backup_pg" {
 # with 406 Not Acceptable for PostgreSQL flexible servers (azurerm 4.81.0, both
 # create and delete). azapi pins the version the Azure CLI uses. The instance name
 # follows the service's own pattern: server, server, a GUID.
-resource "random_uuid" "backup_instance" {}
+resource "random_uuid" "backup_instance" {
+  count = local.pg_count
+}
 
 resource "azapi_resource" "backup_instance" {
+  count = local.pg_count
+
   type      = "Microsoft.DataProtection/backupVaults/backupInstances@2025-07-01"
-  name      = "${azurerm_postgresql_flexible_server.prod.name}-${azurerm_postgresql_flexible_server.prod.name}-${random_uuid.backup_instance.result}"
+  name      = "${azurerm_postgresql_flexible_server.prod[0].name}-${azurerm_postgresql_flexible_server.prod[0].name}-${random_uuid.backup_instance[0].result}"
   parent_id = azurerm_data_protection_backup_vault.prod.id
 
   body = {
     properties = {
       objectType   = "BackupInstance"
-      friendlyName = azurerm_postgresql_flexible_server.prod.name
+      friendlyName = azurerm_postgresql_flexible_server.prod[0].name
       dataSourceInfo = {
         objectType       = "Datasource"
         datasourceType   = "Microsoft.DBforPostgreSQL/flexibleServers"
-        resourceID       = azurerm_postgresql_flexible_server.prod.id
-        resourceName     = azurerm_postgresql_flexible_server.prod.name
+        resourceID       = azurerm_postgresql_flexible_server.prod[0].id
+        resourceName     = azurerm_postgresql_flexible_server.prod[0].name
         resourceType     = "Microsoft.DBforPostgreSQL/flexibleServers"
-        resourceUri      = azurerm_postgresql_flexible_server.prod.id
+        resourceUri      = azurerm_postgresql_flexible_server.prod[0].id
         resourceLocation = azurerm_resource_group.prod.location
       }
       policyInfo = {
