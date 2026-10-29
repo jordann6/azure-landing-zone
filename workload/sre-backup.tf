@@ -209,6 +209,17 @@ locals {
       role  = "Storage Blob Data Contributor"
       who   = azurerm_kubernetes_cluster_extension.aks_backup[0].aks_assigned_identity[0].principal_id
     }
+    # The extension reads the account key for its backup storage location
+    # (listKeys), which Blob Data Contributor does not grant. The Learn
+    # prerequisites table lists only Blob Data Contributor; the azurerm example
+    # uses Storage Account Contributor, and on 2026-10-29 the instance went to
+    # ProtectionError (UserErrorExtensionMSIMissingPermissionsOnBackupStorageLocation,
+    # listKeys 403) without it.
+    extension_account = {
+      scope = azurerm_storage_account.aks_backup[0].id
+      role  = "Storage Account Contributor"
+      who   = azurerm_kubernetes_cluster_extension.aks_backup[0].aks_assigned_identity[0].principal_id
+    }
     vault_reader_cluster = {
       scope = azurerm_kubernetes_cluster.prod.id
       role  = "Reader"
