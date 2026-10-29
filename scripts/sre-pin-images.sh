@@ -45,4 +45,4 @@ ACR="$(terraform -chdir="$ROOT/workload" output -raw acr_name 2>/dev/null)" || t
 echo "Pinned. Commit and push gitops/, then run:"
 echo "  az acr import --name $ACR --source ghcr.io/jordann6/slo-demo@$APP --image slo-demo:$SHA"
 echo "  az acr import --name $ACR --source ghcr.io/jordann6/slo-grafana@$GRAFANA --image slo-grafana:$SHA"
-echo "  az acr import --name $ACR --source docker.io/library/postgres@$PG --image postgres:16.14"
+echo "  az acr import --name $ACR --source ghcr.io/jordann6/postgres@$PG --image postgres:16.14"

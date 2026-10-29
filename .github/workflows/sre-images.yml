@@ -95,3 +95,28 @@ jobs:
             echo ""
             echo "\`az acr import --name <acr> --source ghcr.io/${OWNER}/${NAME}@${DIGEST} --image ${NAME}:${SHA}\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Copies the pinned Postgres index into ghcr.io with its digest unchanged.
+  # ACR imports from Docker Hub and ECR Public both returned 429 (shared egress
+  # rate limits) during the 2026-10-29 session; ghcr imports did not.
+  mirror-postgres:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DIGEST: sha256:95206741a5b214807675e14165369d05b93a9cf692223b616d07cca227e74b0b
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Copy postgres 16.14 by digest
+        run: |
+          docker buildx imagetools create \
+            --tag "ghcr.io/${{ github.repository_owner }}/postgres:16.14" \
+            "docker.io/library/postgres@${DIGEST}"
+          docker buildx imagetools inspect "ghcr.io/${{ github.repository_owner }}/postgres:16.14" | head -3
