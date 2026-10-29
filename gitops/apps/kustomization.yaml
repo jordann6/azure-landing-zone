@@ -8,7 +8,7 @@ resources:
 images:
   - name: slo-demo
     newName: ${ACR_LOGIN_SERVER}/slo-demo
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    digest: sha256:a2e1f8a4f986578e1f45967b270ac8a95606dab062fdba852f8462b143ec8bc4
   - name: slo-grafana
     newName: ${ACR_LOGIN_SERVER}/slo-grafana
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    digest: sha256:3be4d9e89be284fd42de68f75f1dfdcf7fe350540624c19542953078039def5c
