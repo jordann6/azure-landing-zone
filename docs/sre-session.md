@@ -75,6 +75,12 @@ outputs exist. Never reuse a stale plan.
    `~/sre-demo-receipts/<date>/`, outside the repo.
 7. **Teardown:** `make destroy` (compute, secrets, observability, workload, base,
    then verify-teardown even after a failure). Delete `~/.ssh/alz-mgmt-session`.
+   On 2026-10-29 the workload destroy removed the hub peerings and the Key Vault
+   private endpoint before the cluster, and the Flux configuration and backup
+   instance deletes hung for 30 minutes. The cluster now depends on its whole
+   network path (`make check-destroy-order` proves the graph). Fixed in code; the
+   next session's teardown is the live proof. If a delete still hangs, check node
+   readiness and the peerings first.
 8. **After:** narrow the AKS Backup egress list from the session's
    `AZFWApplicationRule` logs, fix anything else the run found, then merge.
 

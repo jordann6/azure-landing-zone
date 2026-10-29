@@ -96,6 +96,56 @@ real deploy, image bake or teardown in Azure.
    from the old name-based pattern. They now trust the immutable form, which also
    means a deleted and recreated repo with the same name cannot inherit the trust.
 
+The drift proof and the [SRE demo session](#sre-demo-gitops-slos-and-a-restore-drill)
+on 2026-10-29 added these.
+
+9. **The shared drift check cried wolf.** `terraform plan -refresh-only
+   -detailed-exitcode` returned 2 on azurerm with an empty `resource_drift`, so
+   every clean run of platform-guardrails `tf-drift` v1.8.1 opened a drift issue
+   listing 0 resources. The fix (platform-guardrails PR #12) decides drift from
+   `resource_drift`; `drift.yml` pins it by SHA.
+10. **A fresh cluster create was denied its own KMS key, twice.** "Access to
+    KeyVault ... was denied when using KMS", 13 minutes apart. The control-plane
+    identity's vault read came only from a custom role that replicates slowly.
+    Fixed with the built-in Reader on the vault and a 5-minute propagation wait.
+11. **No pod could pull from the private registry.** The kubelet identity had no
+    AcrPull. The 2026-10-06 proof never pulled an app image, so it never showed.
+12. **Two nodes were not enough.** The add-ons alone requested about 1.95 of the
+    1.9 allocatable vCPU per D2s v3 node, and the AKS Backup extension's Helm
+    install timed out. The default is now 3 nodes.
+13. **Docker Hub and ECR Public both rate-limited ACR import (429)** through the
+    shared egress. Postgres is mirrored to ghcr.io by digest and imported from there.
+14. **The backup extension needs a role the docs leave out.** The instance sat in
+    `ProtectionError` until its identity got Storage Account Contributor (for
+    `listKeys`); the Learn prerequisites table lists only Blob Data Contributor.
+15. **`az aks command invoke` fails every call in Azure CLI 2.83.0** ("Operation
+    returned an invalid status 'OK'"). The drills call the runCommand REST API,
+    which on an Entra cluster also needs a clusterToken.
+16. **`az k8s-configuration flux update --suspend` alone is rejected.** It has to
+    resend `--kind git --url --branch`.
+17. **A polling helper hid a fired alert and a Flux revert.** `wait_until` expanded
+    its `$(...)` condition once, at the call, and retested the same value forever.
+    It now evaluates the condition on every poll.
+18. **Checkov's HCL parser drops a whole file on an attribute named `for`.** The
+    alert rules carry their hold time in range vectors instead.
+19. **A recovery point is older than its timestamp.** `recoveryPointTime` was
+    17:40:54, but the newest recovered write was from 17:38:27. Data loss is
+    measured from the last recovered write.
+20. **Teardown cut the cluster's network out from under it.** Terraform deleted the
+    hub peerings and the Key Vault private endpoint before the cluster, because
+    nothing ordered them. Nodes lost egress and went NotReady, and the Flux
+    configuration and backup instance deletes hung 30 minutes and failed. The
+    cluster now depends on its whole network path, and `make check-destroy-order`
+    (also a CI job) fails on a missing edge. Fixed in code; the next live teardown
+    is the proof.
+21. **The FQDN allowlist was mostly moot.** Network rules are evaluated before
+    application rules, and an `AzureCloud.<region>:443` network rule carried 2874
+    connections, Monitor ingestion among them. The backup extension's FQDN rule
+    had zero hits. A private cluster needs none of those ports, so the rule is now
+    the documented `AzureMonitor:443`, and the backup wildcards are gone. Built,
+    not yet proven live. The firewall did deny what it should: grafana.com,
+    usage.projectcalico.org and cdn.fwupd.org.
+
 ## How Azure differs from the AWS and GCP zones
 
 Same design contract, three different control planes:
@@ -134,7 +184,7 @@ layout and the reusable `landing-zone` spoke module are in
 
 ## Parity with the AWS and GCP zones
 
-Status as of 2026-10-26. "Built" means code merged or committed. "Proven" means a
+Status as of 2026-10-29. "Built" means code merged or committed. "Proven" means a
 deploy-test-destroy session passed. Where a cell says pending, nothing was run. AKS and ACR on azurerm 4.x were proven 2026-10-06 in eastus2 (centralus refused new AKS clusters with `AKSCapacityHeavyUsage`): clean post-apply plan, private VNet-integrated cluster with private KMS, ACR behind its private endpoint with CMK and the cache rule.
 
 | Capability | AWS | Azure | GCP |
@@ -149,7 +199,10 @@ deploy-test-destroy session passed. Where a cell says pending, nothing was run. 
 | Compute baseline | Guardrails live, compute proven 2026-10-06 | Image and VM proven 2026-10-05 | Code complete, live run pending |
 | Dedicated state backend | Built | Built | Built |
 | Gated CI apply and destroy | Proven 2026-10-15 on the full hourly stack (196 resources) | Proven 2026-10-26 on the `ci-proof/` root only, see [CI](#ci) | Shared workflows support WIF, activation pending |
-| Drift detection | Daily on the accounts root, proven 2026-10-26 | Not wired | Not wired |
+| Drift detection | Daily on the accounts root, proven 2026-10-26 | Daily on `ci-proof/`, proven 2026-10-29 (clean run, a CLI tag change opened issue #13 naming the VNet, the revert closed it) | Not wired |
+| GitOps | Not built | Flux extension on the private AKS, proven 2026-10-29 (manual scale reverted in 29s, a commit live in 63s with no kubectl) | Not built |
+| SLO alerting | Not built | Managed Prometheus, multiwindow burn-rate rules, proven 2026-10-29 (`SloFastBurn` paged 5m28s after a 50% fault) | Not built |
+| Kubernetes backup | Not built | AKS Backup operational tier, restore proven 2026-10-29 (namespace deleted, writes resumed in 405s, 294 writes lost) | Not built |
 | Secrets scanner | Live | Identity, alert and positive control proven 2026-10-06 (metadata-only role, 403 on value read, NearExpiry alert); the Rails scanner itself is not run here | None |
 | Warm standby | Not started | Member portal only: two-region app and SQL failover group, planned failovers measured 2026-10-03. Prod LZ tier has in-region zone HA and geo-redundant backup only | None |
 
@@ -261,6 +314,36 @@ permits AKS's required destinations, `workload/aks-egress-firewall.tf` attaches 
 Deploy it after the base (with the hourly firewall up): `make deploy-workload`, tear
 it down first with `make destroy-workload`.
 
+### SRE demo: GitOps, SLOs and a restore drill
+
+![SRE demo layer](docs/sre-demo-architecture.png)
+
+Two flags on the workload root, both off by default, turn the paved road into
+something an on-call engineer would recognise. `enable_sre_demo` adds the Flux
+extension reconciling `gitops/` from this repo (a .NET 10 service with a load
+generator, Grafana, and a Postgres StatefulSet on CMK disks), managed Prometheus
+into an Azure Monitor workspace, and SLO recording and burn-rate alert rules that
+page through the base action group. `enable_aks_backup` adds an operational-tier
+AKS Backup vault for the stateful namespace. Images are pinned by digest; secrets
+come from Key Vault through the CSI driver, one workload identity per consumer.
+
+Session of 2026-10-29, eastus2, about 3.5 hours of hourly resources, estimated
+$7 to $9.50 (Cost Management had not posted when this was written):
+
+| Drill | Result |
+|---|---|
+| GitOps (`make drill-gitops`) | Flux Compliant on infra, apps and data. A manual `kubectl scale` 3 to 1 reverted by kustomize-controller in 29s. A commit (load generator 20 to 25 rps) live in 63s with no kubectl. |
+| SLO (`make drill-slo`) | 50% fault injected at 17:02:36. `SloFastBurn` fired at 17:08:04 (5m28s; evaluated 0.077 against 0.072) and the page email arrived by 17:10. Fault removed at 17:11:45, alert resolved at 17:23:02. |
+| Restore (`make drill-restore`) | Namespace deleted at 17:43:35. Restore job 219s, Postgres Ready at +316s, writes resumed at +405s. Last durable write 3301, recovered 3007 with no gaps: 294 writes lost. Flux resumed Compliant with no diff. |
+| Add-ons | Container Insights wrote 2153 KubePodInventory rows in 15 minutes; Azure Policy reported 9 states. |
+
+What the session found is in [What the live runs found](#what-the-live-runs-found),
+items 10 to 21. The SLO spec is [docs/slo.md](docs/slo.md), the runbooks are in
+[docs/runbooks/](docs/runbooks/), the priced session plan with stop conditions is
+[docs/sre-session.md](docs/sre-session.md), and the two design calls are
+[ADR-0005](docs/adr/0005-sre-metrics-path.md) (metrics path) and
+[ADR-0006](docs/adr/0006-aks-backup-operational-tier.md) (backup tier).
+
 ## Member portal (`portal/`)
 
 ![Member portal](docs/portal-architecture.png)
@@ -358,6 +441,11 @@ Standard public IPs, VMs, private endpoints) is still alive.
 - **Demo window** (flags on, ~2 hours): Azure Firewall Standard ~$1.25/hr, Bastion
   Basic ~$0.19/hr, private endpoints ~$0.01/hr each, Log Analytics ~free at demo
   volume. Roughly $3, under the portfolio's ~$7 ceiling.
+- **SRE demo session** (workload with `enable_sre_demo` and `enable_aks_backup`):
+  about $1.90/hr standing plus a day of ACR Premium and the backup instance,
+  about $7 to $8 for a 2-hour window under a $12 stop condition
+  ([sre-session.md](docs/sre-session.md)). The 2026-10-29 session ran longer and
+  is estimated at $7 to $9.50.
 - **Deployer IP drift**: the Key Vault firewall allows only `deployer_ip_cidrs`.
   If your public IP changes between applies, the key read fails with
   `ForbiddenByFirewall`; update the tfvars (`curl -4 ifconfig.me`) and re-apply.
@@ -429,6 +517,18 @@ built 4 resources after approval, a [gated destroy](https://github.com/jordann6/
 removed all 4 with the hourly check clean, and the [TTL guard](https://github.com/jordann6/azure-landing-zone/actions/runs/40348754503)
 passed on all four roots.
 
+`drift.yml` runs a daily refresh-only plan of `ci-proof/` as the plan identity
+and opens one `drift` issue naming the changed resources and attributes, never
+their values; the next clean run closes it. It pins platform-guardrails
+`8eb9a74`, newer than v1.8.1, because v1.8.1 treated refresh-only exit code 2 as
+drift and Terraform returns 2 on this root with nothing drifted. Proven
+2026-10-29: [clean](https://github.com/jordann6/azure-landing-zone/actions/runs/40900151290),
+[drift](https://github.com/jordann6/azure-landing-zone/actions/runs/40900308999)
+(issue #13 named `azurerm_virtual_network.ci` and its tags) and
+[recovered](https://github.com/jordann6/azure-landing-zone/actions/runs/40900419407)
+(issue closed). `make test-drift` replays it. It covers `ci-proof/` only, a
+proof of the drift path, not drift coverage of the whole landing zone.
+
 Scope: CI applies only `ci-proof/`, a free root (isolated VNet, subnet, deny-all
 NSG) in `rg-alz-ci`. Governance, the workload and compute stay operator-applied.
 Moving `workload/` behind CI would need runner access through its Key Vault
@@ -455,7 +555,8 @@ needs a gallery image from the base root. Neither is built.
 - [docs/accelerator-vs-bespoke.md](docs/accelerator-vs-bespoke.md): why bespoke modules over the ALZ accelerator.
 - [docs/hipaa-mapping.md](docs/hipaa-mapping.md): HIPAA 164.312 technical safeguards → Terraform resource, with honest gaps.
 - [docs/kql/](docs/kql/): saved investigation queries behind the alerts.
-- [docs/adr/](docs/adr/): decision records: state backend, compute image exemption, azurerm 4.x, detection tier.
+- [docs/adr/](docs/adr/): decision records: state backend, compute image exemption, azurerm 4.x, detection tier, SRE metrics path, AKS Backup tier.
+- [docs/slo.md](docs/slo.md), [docs/runbooks/](docs/runbooks/), [docs/sre-session.md](docs/sre-session.md): the SRE demo's SLO, runbooks and priced session plan.
 - [docs/portal.md](docs/portal.md): member portal design, two-clock failover, trade-offs, deploy and drill runbook.
 
 ## Tech stack

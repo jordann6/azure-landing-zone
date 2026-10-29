@@ -35,10 +35,11 @@ check-destroy-order: ## Graph check: the cluster and its extensions are destroye
 	python3 scripts/check-destroy-order.py
 
 .PHONY: diagram
-diagram: ## Regenerate docs/architecture.png, workload-architecture.png, portal-architecture.png
+diagram: ## Regenerate docs/architecture.png, workload-architecture.png, portal-architecture.png, sre-demo-architecture.png
 	python3 docs/diagram.py
 	python3 docs/workload.py
 	python3 docs/portal.py
+	python3 docs/sre-demo.py
 
 # ---- state backend (standing, never part of destroy) -------------------------
 # bootstrap/ owns the storage account every root keeps state in. One-time move
