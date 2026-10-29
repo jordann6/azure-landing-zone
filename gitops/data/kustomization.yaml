@@ -10,7 +10,9 @@ resources:
   - writer.yaml
   - podmonitor.yaml
 images:
-  # Imported into ACR from docker.io/library/postgres:16.14 by digest.
+  # postgres:16.14, mirrored by digest to ghcr.io/jordann6/postgres (the
+  # mirror-postgres job in sre-images.yml) and imported into ACR from there.
+  # ACR imports straight from Docker Hub and ECR Public both hit 429s.
   - name: postgres
     newName: ${ACR_LOGIN_SERVER}/postgres
     digest: sha256:95206741a5b214807675e14165369d05b93a9cf692223b616d07cca227e74b0b

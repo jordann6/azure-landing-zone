@@ -2,8 +2,8 @@
 # Shared helpers for the SRE demo drills (sourced, not run).
 #
 # The cluster is private with local accounts disabled, so every kubectl call goes
-# through `az aks command invoke` (the AKS control plane runs it in a short-lived
-# pod). PromQL goes to the Azure Monitor workspace query endpoint with the
+# through the AKS runCommand API (the control plane runs it in a short-lived
+# pod); see kx below. PromQL goes to the Azure Monitor workspace query endpoint with the
 # operator's Entra token. Receipts go to a private directory outside the repo,
 # because they hold subscription and resource IDs.
 

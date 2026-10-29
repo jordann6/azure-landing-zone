@@ -35,12 +35,28 @@ if [ "$state" = "Compliant" ]; then ok "Flux is Compliant at $rev"; else bad "Fl
 
 echo "-- 2. drift: scale slo-demo to 1 by hand, expect Flux to restore 3 --"
 replicas() { kx "kubectl get deploy slo-demo -n slo-demo -o jsonpath='{.spec.replicas}'" | tail -1; }
-kx "kubectl scale deploy/slo-demo -n slo-demo --replicas=1" >/dev/null
-t0="$(epoch)"
-receipt "$R" drift_injected_at "$(now)"
+# The timing comes from the cluster, not from this loop. Each poll is a
+# runCommand round trip of 20 to 40 seconds, so the time the loop notices the
+# revert overstates it. The injection time is the cluster clock right after the
+# scale, and the revert time is when kustomize-controller last wrote the
+# Deployment (its managedFields entry). Flux applies only when it finds a diff,
+# so that write is the revert.
+injected="$(kx "kubectl scale deploy/slo-demo -n slo-demo --replicas=1 >/dev/null && date -u +%Y-%m-%dT%H:%M:%SZ" | tail -1)"
+receipt "$R" drift_injected_at "$injected"
+flux_write() {
+  kx "kubectl get deploy slo-demo -n slo-demo -o jsonpath='{range .metadata.managedFields[?(@.manager==\"kustomize-controller\")]}{.time}{\"\\n\"}{end}'" |
+    grep -E '^[0-9]{4}-' | sort | tail -1
+}
 if wait_until 300 10 'test "$(replicas)" = "3"'; then
-  receipt "$R" drift_reverted_seconds "$(($(epoch) - t0))"
-  ok "Flux reverted the manual scale in $(($(epoch) - t0))s"
+  reverted="$(flux_write)"
+  secs="$(jq -rn --arg a "$injected" --arg b "$reverted" '($b | fromdateiso8601) - ($a | fromdateiso8601)' 2>/dev/null)"
+  if [ -n "$reverted" ] && [ -n "$secs" ] && [ "$secs" -ge 0 ]; then
+    receipt "$R" drift_reverted_at "$reverted (kustomize-controller managedFields)"
+    receipt "$R" drift_reverted_seconds "$secs"
+    ok "Flux reverted the manual scale in ${secs}s (cluster timestamps)"
+  else
+    bad "replicas back to 3, but no kustomize-controller write after $injected (reverted by something else?)"
+  fi
 else
   bad "replicas not restored to 3 within 300s"
 fi

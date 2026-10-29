@@ -12,9 +12,8 @@ Bastion IP-based tunnels cannot target a non-VM IP on a custom port, which is wh
 the hop goes through the VM.
 
 ```bash
-ILB=$(az aks command invoke -g "$RG" -n "$AKS" \
-  --command "kubectl get svc grafana -n observability -o jsonpath='{.status.loadBalancer.ingress[0].ip}'" \
-  --query logs -o tsv)
+source scripts/sre-lib.sh && load_outputs   # kx: runCommand REST, see slo-fast-burn.md
+ILB=$(kx "kubectl get svc grafana -n observability -o jsonpath='{.status.loadBalancer.ingress[0].ip}'" | tail -1)
 VM_ID=$(az vm show -g rg-alz-compute -n vm-alz-mgmt --query id -o tsv)
 az network bastion ssh -n bas-alz-hub -g rg-alz-hub --target-resource-id "$VM_ID" \
   --auth-type ssh-key --username lzadmin --ssh-key ~/.ssh/alz-mgmt-session -- -L 3000:"$ILB":80

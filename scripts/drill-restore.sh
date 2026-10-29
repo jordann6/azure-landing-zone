@@ -40,14 +40,19 @@ if [ "${CONFIRM:-}" != "${AKS}/${NS}" ]; then
 fi
 [ -n "$VAULT" ] && [ -n "$BI" ] || { echo "backup outputs missing; enable_aks_backup applied?" >&2; exit 1; }
 
+GITOPS_URL="$(az k8s-configuration flux show -g "$RG" -c "$AKS" -t managedClusters -n "$FLUX_CONFIG" --query gitRepository.url -o tsv)"
+GITOPS_BRANCH="$(az k8s-configuration flux show -g "$RG" -c "$AKS" -t managedClusters -n "$FLUX_CONFIG" --query gitRepository.repositoryRef.branch -o tsv)"
 flux_suspend() {
-  az k8s-configuration flux update -g "$RG" -c "$AKS" -t managedClusters -n "$FLUX_CONFIG" --suspend "$1" -o none
+  # The CLI rejects --suspend alone ("Invalid source kind match"); it must
+  # resend the Git source it already has.
+  az k8s-configuration flux update -g "$RG" -c "$AKS" -t managedClusters -n "$FLUX_CONFIG" \
+    --kind git --url "$GITOPS_URL" --branch "$GITOPS_BRANCH" --suspend "$1" -o none
 }
 # Never leave Flux suspended, whatever happens below.
 trap 'flux_suspend false 2>/dev/null || true' EXIT
 
 psql_q() {
-  kx "kubectl exec -n ${NS} postgres-0 -- psql -U slo -d slo -tAc \"$1\"" | tail -1 | tr -d '[:space:]'
+  kx "kubectl exec -n ${NS} postgres-0 -- psql -U slo -d slo -tAc \"$1\"" | grep -v '^[[:space:]]*$' | tail -1 | tr -d '[:space:]'
 }
 job_wait() {
   local id="$1" status

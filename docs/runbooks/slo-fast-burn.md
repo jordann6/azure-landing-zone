@@ -4,12 +4,14 @@
 this rate the 30-day error budget is gone in about two days.
 
 All kubectl commands go through the control plane, because the cluster is
-private with local accounts off:
+private with local accounts off. They use the AKS runCommand API through `kx` in
+`scripts/sre-lib.sh`, not `az aks command invoke`: in Azure CLI 2.83.0 that
+command fails every call with "Operation returned an invalid status 'OK'", and
+the REST call needs a clusterToken for the AKS Entra server application.
 
 ```bash
-RG=$(terraform -chdir=workload output -raw resource_group_name)
-AKS=$(terraform -chdir=workload output -raw aks_cluster_name)
-k() { az aks command invoke -g "$RG" -n "$AKS" --command "$*" --query logs -o tsv; }
+source scripts/sre-lib.sh && load_outputs   # sets RG, AKS, SUB, FLUX_CONFIG
+k() { kx "$*"; }
 ```
 
 ## First three checks
