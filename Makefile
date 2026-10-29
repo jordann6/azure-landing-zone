@@ -30,6 +30,10 @@ validate: ## Terraform init (no backend) + validate, all eight roots
 	terraform -chdir=secrets init -backend=false && terraform -chdir=secrets validate
 	terraform -chdir=ci-proof init -backend=false && terraform -chdir=ci-proof validate
 
+.PHONY: check-destroy-order
+check-destroy-order: ## Graph check: the cluster and its extensions are destroyed before the network they need
+	python3 scripts/check-destroy-order.py
+
 .PHONY: diagram
 diagram: ## Regenerate docs/architecture.png, workload-architecture.png, portal-architecture.png
 	python3 docs/diagram.py

@@ -305,5 +305,7 @@ resource "azurerm_data_protection_backup_instance_kubernetes_cluster" "aks_demo"
     azurerm_role_assignment.aks_backup,
     azurerm_kubernetes_cluster_trusted_access_role_binding.aks_backup,
     azurerm_kubernetes_cluster_extension.aks_backup,
+    # Keeps the operator's kubectl access until the instance is deleted.
+    azurerm_role_assignment.aks_admin,
   ]
 }

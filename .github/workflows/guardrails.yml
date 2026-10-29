@@ -74,6 +74,17 @@ jobs:
       terraform_dir: ci-proof
       skip_policy: true
 
+  # Teardown ordering from `terraform graph` (no state, no credentials).
+  destroy-order:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Check workload destroy order
+        run: python3 scripts/check-destroy-order.py
+
   # The portal app's unit tests (no database or Azure needed).
   app-tests:
     runs-on: ubuntu-latest

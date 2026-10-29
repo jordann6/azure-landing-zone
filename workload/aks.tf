@@ -213,14 +213,31 @@ resource "azurerm_kubernetes_cluster" "prod" {
   # The UDR egress route, the network role, and the etcd-key access must all exist
   # before the cluster provisions (outbound_type=UDR needs the route in place; the
   # firewall must already allow AKS's required FQDNs, see aks-egress-firewall.tf).
+  #
+  # The same edges order the teardown: Terraform destroys in reverse dependency
+  # order, so everything listed here outlives the cluster and everything built on
+  # it (the Flux and backup extensions, the Flux configuration, the backup
+  # instance). On 2026-10-29 the peerings and the Key Vault private endpoint had
+  # no edge to the cluster and went first. The 0.0.0.0/0 route then pointed at a
+  # firewall the spoke could no longer reach, the nodes went NotReady, and the
+  # Flux configuration and backup instance deletes hung for 30 minutes and
+  # failed. The peerings, the private endpoints with their DNS links, and every
+  # rule collection group the cluster's egress uses are therefore listed too.
   depends_on = [
     azurerm_subnet_route_table_association.aks,
+    azurerm_virtual_network_peering.prod_to_hub,
+    azurerm_virtual_network_peering.hub_to_prod,
+    azurerm_private_endpoint.kv,
+    azurerm_private_endpoint.acr,
+    azurerm_private_dns_zone_virtual_network_link.pe,
     azurerm_role_assignment.aks_network,
     azurerm_role_assignment.aks_kms,
     azurerm_role_assignment.aks_kv_kms_pe,
     azurerm_role_assignment.aks_kv_reader,
     time_sleep.aks_rbac_propagation,
     azurerm_firewall_policy_rule_collection_group.aks_egress,
+    azurerm_firewall_policy_rule_collection_group.aks_addons,
+    azurerm_firewall_policy_rule_collection_group.sre,
   ]
 }
 

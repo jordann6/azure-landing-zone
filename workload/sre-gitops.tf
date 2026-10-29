@@ -88,9 +88,13 @@ resource "azurerm_kubernetes_flux_configuration" "sre" {
     }
   }
 
+  # aks_admin is scoped to the cluster, so it cannot outlive it, but this edge
+  # keeps the operator's kubectl access until the configuration is gone. If a
+  # delete hangs, the cluster can still be inspected.
   depends_on = [
     azurerm_kubernetes_cluster_extension.flux,
     azurerm_role_assignment.aks_acr_pull,
+    azurerm_role_assignment.aks_admin,
   ]
 }
 
