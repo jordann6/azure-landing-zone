@@ -21,6 +21,13 @@ locals {
   sli_selector = "namespace=\"${local.app_namespace}\""
 
   sli_windows = ["5m", "30m", "1h", "6h"]
+
+  # Runbook links follow the branch Flux tracks, so a page sent during a
+  # feature-branch session links to runbooks that exist on that branch.
+  runbook_base_url = coalesce(
+    var.slo_alert_runbook_base_url,
+    "${trimsuffix(var.gitops_repo_url, ".git")}/blob/${var.gitops_branch}/docs/runbooks",
+  )
 }
 
 resource "azurerm_monitor_workspace" "sre" {
@@ -143,7 +150,7 @@ resource "azurerm_monitor_alert_prometheus_rule_group" "slo_alerts" {
     labels     = { slo = "slo-demo-availability", page = "true" }
     annotations = {
       summary     = "slo-demo is burning its 30-day error budget at over 14.4x (2% of budget per hour)."
-      runbook_url = "${var.slo_alert_runbook_base_url}/slo-fast-burn.md"
+      runbook_url = "${local.runbook_base_url}/slo-fast-burn.md"
     }
     action {
       action_group_id = local.ops_action_group_id
@@ -162,7 +169,7 @@ resource "azurerm_monitor_alert_prometheus_rule_group" "slo_alerts" {
     labels     = { slo = "slo-demo-availability", ticket = "true" }
     annotations = {
       summary     = "slo-demo is burning its 30-day error budget at over 6x (5% of budget in 6 hours)."
-      runbook_url = "${var.slo_alert_runbook_base_url}/slo-slow-burn.md"
+      runbook_url = "${local.runbook_base_url}/slo-slow-burn.md"
     }
     action {
       action_group_id = local.ops_action_group_id
@@ -181,7 +188,7 @@ resource "azurerm_monitor_alert_prometheus_rule_group" "slo_alerts" {
     labels     = { slo = "slo-demo-availability", ticket = "true" }
     annotations = {
       summary     = "slo-demo is receiving no requests, so its error ratio is undefined. This is not a healthy reading."
-      runbook_url = "${var.slo_alert_runbook_base_url}/slo-no-data.md"
+      runbook_url = "${local.runbook_base_url}/slo-no-data.md"
     }
     action {
       action_group_id = local.ops_action_group_id
@@ -200,7 +207,7 @@ resource "azurerm_monitor_alert_prometheus_rule_group" "slo_alerts" {
     labels     = { slo = "slo-demo-availability", page = "true" }
     annotations = {
       summary     = "No slo-demo scrape target is up. Burn-rate alerts cannot fire without data."
-      runbook_url = "${var.slo_alert_runbook_base_url}/slo-no-data.md"
+      runbook_url = "${local.runbook_base_url}/slo-no-data.md"
     }
     action {
       action_group_id = local.ops_action_group_id

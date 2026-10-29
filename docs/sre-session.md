@@ -13,7 +13,7 @@ in eastus2.
 |---|---|---|
 | Azure Firewall Standard | $1.25/hr deployment + $0.07/hr per capacity unit | whole session |
 | Bastion Standard | $0.29/hr (Basic $0.19/hr) | only for the Grafana UI |
-| AKS nodes, 2 x D2s v3 | $0.096/hr each | whole session |
+| AKS nodes, 3 x D2s v3 | $0.096/hr each | whole session |
 | Management VM, B2s | $0.0499/hr | only for the Grafana UI |
 | Private endpoints (ACR, Key Vault, AKS KMS, backup blob) | $0.01/hr each | whole session |
 | Standard internal load balancer (Grafana) | $0.025/hr | whole session |
@@ -31,11 +31,13 @@ By usage:
 | Premium SSD P1, 4 GiB | $0.60/month | negligible |
 
 **Estimate:** firewall $1.32 to $1.39/hr (1 or 2 capacity units) + Bastion Basic
-$0.19 + nodes $0.192 + four private endpoints $0.04 + load balancer $0.025 = about
-**$1.77 to $1.84/hr** standing. The Grafana UI path adds $0.15/hr (Bastion
-Standard delta $0.10, VM $0.05). A 2-hour window is $3.50 to $4.00 hourly, plus
+$0.19 + nodes $0.288 + four private endpoints $0.04 + load balancer $0.025 = about
+**$1.87 to $1.94/hr** standing. The Grafana UI path adds $0.15/hr (Bastion
+Standard delta $0.10, VM $0.05). A 2-hour window is $3.75 to $3.90 hourly, plus
 ACR's day ($1.67), the backup instance's day (about $0.40) and Log Analytics
-(about $1): **about $6.50 to $7.50**, inside the $12 cap with room for one retry.
+(about $1): **about $7 to $8**, inside the $12 cap with room for one retry.
+Three nodes, not two: two D2s v3 were CPU-starved by the add-ons on 2026-10-29
+(see `aks_node_count` in workload/variables.tf).
 The cap is an operator stop condition, not an enforced cutoff; the $20 budget
 alert only notifies.
 

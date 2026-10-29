@@ -95,10 +95,13 @@ variable "aks_node_vm_size" {
   default     = "Standard_D2s_v3"
 }
 
+# Three, not two. On 2026-10-29 two D2s_v3 nodes were CPU-starved: the add-ons
+# alone requested about 1.95 of the 1.9 allocatable vCPU per node, and the AKS
+# Backup extension's Helm install timed out until a third node joined.
 variable "aks_node_count" {
   description = "Node pool node count."
   type        = number
-  default     = 2
+  default     = 3
 }
 
 # ── Data tier ─────────────────────────────────────────────────────────────────
@@ -171,8 +174,14 @@ variable "gitops_branch" {
   default     = "main"
 }
 
+variable "aks_egress_broad_service_tag" {
+  description = "Rollback switch. true restores the pre-2026-10-29 AzureCloud.<region> network rule (1194, 9000, 443) in rcg-aks-egress; false allows only the documented AzureMonitor:443 rule."
+  type        = bool
+  default     = false
+}
+
 variable "slo_alert_runbook_base_url" {
-  description = "Base URL for runbook links in alert annotations."
+  description = "Base URL for runbook links in alert annotations. Null derives it from gitops_repo_url and gitops_branch, so the links resolve on the branch the cluster runs (a hardcoded main 404s until merge)."
   type        = string
-  default     = "https://github.com/jordann6/azure-landing-zone/blob/main/docs/runbooks"
+  default     = null
 }
