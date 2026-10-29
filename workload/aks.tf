@@ -58,6 +58,34 @@ resource "azurerm_role_assignment" "aks_kv_kms_pe" {
   principal_id       = azurerm_user_assigned_identity.aks.principal_id
 }
 
+# The AKS resource provider checks, as the cluster identity, that it can read the
+# vault (management plane) and its keys before it creates a KMS cluster. Crypto
+# User grants only the key data actions, and the vault read otherwise came only
+# from the custom role above, which is created seconds earlier and replicates
+# slowly. On 2026-10-29 a fresh deploy failed twice, 13 minutes apart, with
+# "Access to KeyVault ... was denied when using KMS". The built-in Reader on the
+# vault gives that read directly.
+resource "azurerm_role_assignment" "aks_kv_reader" {
+  scope                = azurerm_key_vault.workload.id
+  role_definition_name = "Reader"
+  principal_id         = azurerm_user_assigned_identity.aks.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Role assignments for a brand-new identity are eventually consistent. Give them
+# time before the cluster create validates them, so a fresh deploy does not fail
+# on propagation.
+resource "time_sleep" "aks_rbac_propagation" {
+  create_duration = "5m"
+
+  depends_on = [
+    azurerm_role_assignment.aks_network,
+    azurerm_role_assignment.aks_kms,
+    azurerm_role_assignment.aks_kv_kms_pe,
+    azurerm_role_assignment.aks_kv_reader,
+  ]
+}
+
 resource "azurerm_kubernetes_cluster" "prod" {
   # checkov:skip=CKV_AZURE_170:Free tier (no uptime-SLA paid SKU) keeps the timed demo inside the cost ceiling; the paid SKU is the production upgrade.
   # checkov:skip=CKV_AZURE_232:Single node pool runs the workloads, mirroring the one AWS EKS managed node group; a dedicated system pool is the production split.
@@ -190,6 +218,8 @@ resource "azurerm_kubernetes_cluster" "prod" {
     azurerm_role_assignment.aks_network,
     azurerm_role_assignment.aks_kms,
     azurerm_role_assignment.aks_kv_kms_pe,
+    azurerm_role_assignment.aks_kv_reader,
+    time_sleep.aks_rbac_propagation,
     azurerm_firewall_policy_rule_collection_group.aks_egress,
   ]
 }
