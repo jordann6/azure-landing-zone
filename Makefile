@@ -149,6 +149,16 @@ destroy-secrets: ## Remove the scanner identity, alert and control secret before
 test-flow-logs: ## Prove VNet flow logs are configured and delivering (needs enable_flow_logs and time for analytics lag)
 	scripts/test-flow-logs.sh
 
+.PHONY: drill-gitops drill-slo drill-restore
+drill-gitops: ## SRE demo: Flux Compliant, manual drift reverted, a pushed commit converges (timed)
+	scripts/drill-gitops.sh
+
+drill-slo: ## SRE demo: inject failure, SloFastBurn fires and pages, runbook diagnosis, resolve (timed)
+	scripts/drill-slo.sh
+
+drill-restore: ## SRE demo, DESTRUCTIVE: delete and restore slo-data from AKS Backup (needs CONFIRM=<cluster>/slo-data)
+	scripts/drill-restore.sh
+
 .PHONY: destroy-workload
 destroy-workload: ## Tear down the prod workload paved road (AKS, PostgreSQL, ACR, backup) before the base
 	@echo "==> A protected Backup vault can block deletion until retention clears; preserve recovery data and retry afterward."

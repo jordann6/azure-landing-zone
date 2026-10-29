@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: slo-data
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - secretproviderclass.yaml
+  - networkpolicy.yaml
+  - postgres.yaml
+  - writer.yaml
+  - podmonitor.yaml
+images:
+  # Imported into ACR from docker.io/library/postgres:16.14 by digest.
+  - name: postgres
+    newName: ${ACR_LOGIN_SERVER}/postgres
+    digest: sha256:95206741a5b214807675e14165369d05b93a9cf692223b616d07cca227e74b0b
+  - name: slo-demo
+    newName: ${ACR_LOGIN_SERVER}/slo-demo
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

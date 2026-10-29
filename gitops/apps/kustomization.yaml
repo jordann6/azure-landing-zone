@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - slo-demo
+  - grafana
+# Digests come from the "SRE demo images" workflow run summary; set them with
+# scripts/sre-pin-images.sh. The registry host is substituted by Flux.
+images:
+  - name: slo-demo
+    newName: ${ACR_LOGIN_SERVER}/slo-demo
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  - name: slo-grafana
+    newName: ${ACR_LOGIN_SERVER}/slo-grafana
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

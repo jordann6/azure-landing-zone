@@ -8,6 +8,8 @@
 # ADR-0003). The backup_immutability_locked variable is reserved for that upgrade.
 
 resource "azurerm_data_protection_backup_vault" "prod" {
+  count = local.pg_count
+
   name                = "bv-${var.project}-prod"
   resource_group_name = azurerm_resource_group.prod.name
   location            = azurerm_resource_group.prod.location
@@ -25,8 +27,10 @@ resource "azurerm_data_protection_backup_vault" "prod" {
 }
 
 resource "azurerm_data_protection_backup_policy_postgresql_flexible_server" "prod" {
+  count = local.pg_count
+
   name     = "bkpol-${var.project}-postgres"
-  vault_id = azurerm_data_protection_backup_vault.prod.id
+  vault_id = azurerm_data_protection_backup_vault.prod[0].id
 
   backup_repeating_time_intervals = ["R/2026-01-01T05:00:00+00:00/P1D"]
   time_zone                       = "UTC"
@@ -45,37 +49,43 @@ resource "azurerm_data_protection_backup_policy_postgresql_flexible_server" "pro
 # effect at RG scope or above; a server-scoped assignment leaves the vault unable
 # to read the RG and the backup configuration fails with AuthorizationFailed.
 resource "azurerm_role_assignment" "backup_pg" {
+  count = local.pg_count
+
   scope                = azurerm_resource_group.prod.id
   role_definition_name = "PostgreSQL Flexible Server Long Term Retention Backup Role"
-  principal_id         = azurerm_data_protection_backup_vault.prod.identity[0].principal_id
+  principal_id         = azurerm_data_protection_backup_vault.prod[0].identity[0].principal_id
 }
 
 # The azurerm backup-instance resource calls an API version the service answers
 # with 406 Not Acceptable for PostgreSQL flexible servers (azurerm 4.81.0, both
 # create and delete). azapi pins the version the Azure CLI uses. The instance name
 # follows the service's own pattern: server, server, a GUID.
-resource "random_uuid" "backup_instance" {}
+resource "random_uuid" "backup_instance" {
+  count = local.pg_count
+}
 
 resource "azapi_resource" "backup_instance" {
+  count = local.pg_count
+
   type      = "Microsoft.DataProtection/backupVaults/backupInstances@2025-07-01"
-  name      = "${azurerm_postgresql_flexible_server.prod.name}-${azurerm_postgresql_flexible_server.prod.name}-${random_uuid.backup_instance.result}"
-  parent_id = azurerm_data_protection_backup_vault.prod.id
+  name      = "${azurerm_postgresql_flexible_server.prod[0].name}-${azurerm_postgresql_flexible_server.prod[0].name}-${random_uuid.backup_instance[0].result}"
+  parent_id = azurerm_data_protection_backup_vault.prod[0].id
 
   body = {
     properties = {
       objectType   = "BackupInstance"
-      friendlyName = azurerm_postgresql_flexible_server.prod.name
+      friendlyName = azurerm_postgresql_flexible_server.prod[0].name
       dataSourceInfo = {
         objectType       = "Datasource"
         datasourceType   = "Microsoft.DBforPostgreSQL/flexibleServers"
-        resourceID       = azurerm_postgresql_flexible_server.prod.id
-        resourceName     = azurerm_postgresql_flexible_server.prod.name
+        resourceID       = azurerm_postgresql_flexible_server.prod[0].id
+        resourceName     = azurerm_postgresql_flexible_server.prod[0].name
         resourceType     = "Microsoft.DBforPostgreSQL/flexibleServers"
-        resourceUri      = azurerm_postgresql_flexible_server.prod.id
+        resourceUri      = azurerm_postgresql_flexible_server.prod[0].id
         resourceLocation = azurerm_resource_group.prod.location
       }
       policyInfo = {
-        policyId = azurerm_data_protection_backup_policy_postgresql_flexible_server.prod.id
+        policyId = azurerm_data_protection_backup_policy_postgresql_flexible_server.prod[0].id
       }
     }
   }

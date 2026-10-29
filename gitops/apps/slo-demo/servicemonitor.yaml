@@ -1,0 +1,22 @@
+# Picked up by managed Prometheus (ama-metrics), which watches only the
+# azmonitoring.coreos.com group, not the OSS monitoring.coreos.com one. The label
+# limits are the values Microsoft's templates require so series are not dropped.
+apiVersion: azmonitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: slo-demo
+spec:
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
+  selector:
+    matchLabels:
+      app: slo-demo
+  endpoints:
+    - port: metrics
+      interval: 15s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod

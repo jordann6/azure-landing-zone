@@ -8,6 +8,8 @@
 # the sanctioned secrets path. Storage is CMK-encrypted with the data-tier key.
 
 resource "azurerm_user_assigned_identity" "pg" {
+  count = local.pg_count
+
   name                = "id-${var.project}-postgres"
   location            = azurerm_resource_group.prod.location
   resource_group_name = azurerm_resource_group.prod.name
@@ -16,28 +18,36 @@ resource "azurerm_user_assigned_identity" "pg" {
 
 # The server identity uses the data CMK to encrypt storage.
 resource "azurerm_role_assignment" "pg_kms" {
+  count = local.pg_count
+
   scope                = azurerm_key_vault.workload.id
   role_definition_name = "Key Vault Crypto User"
-  principal_id         = azurerm_user_assigned_identity.pg.principal_id
+  principal_id         = azurerm_user_assigned_identity.pg[0].principal_id
 }
 
 # Private DNS for the flexible server's VNet-injected endpoint.
 resource "azurerm_private_dns_zone" "pg" {
+  count = local.pg_count
+
   name                = "${var.project}-prod.postgres.database.azure.com"
   resource_group_name = azurerm_resource_group.prod.name
   tags                = local.tags
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "pg" {
+  count = local.pg_count
+
   name                  = "pg-to-prod"
   resource_group_name   = azurerm_resource_group.prod.name
-  private_dns_zone_name = azurerm_private_dns_zone.pg.name
+  private_dns_zone_name = azurerm_private_dns_zone.pg[0].name
   virtual_network_id    = azurerm_virtual_network.prod.id
   registration_enabled  = false
   tags                  = local.tags
 }
 
 resource "random_password" "pg" {
+  count = local.pg_count
+
   length           = 24
   special          = true
   override_special = "!#%*-_"
@@ -51,9 +61,11 @@ resource "azurerm_role_assignment" "kv_deployer_secrets" {
 }
 
 resource "azurerm_key_vault_secret" "pg_admin" {
+  count = local.pg_count
+
   # checkov:skip=CKV_AZURE_41:No static expiration on the DB credential; rotation is handled operationally (the ESO workload identity reads the current value), not by a fixed expiry.
   name         = "postgres-admin-password"
-  value        = random_password.pg.result
+  value        = random_password.pg[0].result
   key_vault_id = azurerm_key_vault.workload.id
   content_type = "text/plain"
 
@@ -61,6 +73,8 @@ resource "azurerm_key_vault_secret" "pg_admin" {
 }
 
 resource "azurerm_postgresql_flexible_server" "prod" {
+  count = local.pg_count
+
   # checkov:skip=CKV_AZURE_136:Server geo-redundant backup is a cost add; cross-region protection is provided by the geo-redundant Backup vault (backup.tf).
   # checkov:skip=CKV2_AZURE_57:The server is VNet-injected into a delegated subnet with a private DNS zone (no public access), which is private without a separate private endpoint.
   name                = "psql-${var.project}-prod-${random_string.kv.result}"
@@ -75,10 +89,10 @@ resource "azurerm_postgresql_flexible_server" "prod" {
   zone = "1"
 
   administrator_login    = "appadmin"
-  administrator_password = random_password.pg.result
+  administrator_password = random_password.pg[0].result
 
   delegated_subnet_id = azurerm_subnet.data.id
-  private_dns_zone_id = azurerm_private_dns_zone.pg.id
+  private_dns_zone_id = azurerm_private_dns_zone.pg[0].id
 
   public_network_access_enabled = false
 
@@ -95,12 +109,12 @@ resource "azurerm_postgresql_flexible_server" "prod" {
 
   identity {
     type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.pg.id]
+    identity_ids = [azurerm_user_assigned_identity.pg[0].id]
   }
 
   customer_managed_key {
     key_vault_key_id                  = azurerm_key_vault_key.data.id
-    primary_user_assigned_identity_id = azurerm_user_assigned_identity.pg.id
+    primary_user_assigned_identity_id = azurerm_user_assigned_identity.pg[0].id
   }
 
   tags = local.tags
@@ -112,8 +126,10 @@ resource "azurerm_postgresql_flexible_server" "prod" {
 }
 
 resource "azurerm_postgresql_flexible_server_database" "app" {
+  count = local.pg_count
+
   name      = "app"
-  server_id = azurerm_postgresql_flexible_server.prod.id
+  server_id = azurerm_postgresql_flexible_server.prod[0].id
   charset   = "UTF8"
   collation = "en_US.utf8"
 }
@@ -122,8 +138,10 @@ resource "azurerm_postgresql_flexible_server_database" "app" {
 # workspace, next to the AKS audit logs, so an app error and the database event
 # behind it can be joined in one query.
 resource "azurerm_monitor_diagnostic_setting" "pg" {
+  count = local.pg_count
+
   name                       = "diag-postgres"
-  target_resource_id         = azurerm_postgresql_flexible_server.prod.id
+  target_resource_id         = azurerm_postgresql_flexible_server.prod[0].id
   log_analytics_workspace_id = local.law_id
 
   enabled_log { category_group = "allLogs" }

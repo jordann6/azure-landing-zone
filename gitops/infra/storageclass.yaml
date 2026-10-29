@@ -1,0 +1,16 @@
+# Premium SSD through the Azure Disk CSI driver, encrypted with the same disk
+# encryption set (customer-managed key) as the node OS disks. AKS Backup's
+# operational tier snapshots these; its vault tier would refuse them because of
+# the DES, which is why this project uses the operational tier only.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: cmk-disk
+provisioner: disk.csi.azure.com
+parameters:
+  skuName: Premium_LRS
+  diskEncryptionSetID: ${DES_ID}
+  diskEncryptionType: EncryptionAtRestWithCustomerKey
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

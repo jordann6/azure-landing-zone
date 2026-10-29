@@ -139,3 +139,40 @@ variable "backup_immutability_locked" {
   type        = bool
   default     = false
 }
+
+# ── Feature flags ─────────────────────────────────────────────────────────────
+variable "enable_postgres" {
+  description = "PostgreSQL flexible server with its private DNS, Key Vault credential, backup vault, policy and backup instance. Off for the SRE demo session, which keeps its state in the cluster and avoids the vault's 14-day soft-delete floor."
+  type        = bool
+  default     = true
+}
+
+variable "enable_sre_demo" {
+  description = "SRE demo layer (HOURLY usage): Flux GitOps extension and configuration, managed Prometheus (Azure Monitor workspace, DCE, DCR), SLO rule groups, the in-cluster Grafana and data identities, and the egress those need."
+  type        = bool
+  default     = false
+}
+
+variable "enable_aks_backup" {
+  description = "AKS Backup, operational tier (snapshots and storage bill by usage): a demo-only backup vault with soft delete off, the backup extension and its private storage account, trusted access, policy and a backup instance for the stateful namespace. Requires enable_sre_demo."
+  type        = bool
+  default     = false
+}
+
+variable "gitops_repo_url" {
+  description = "Public Git repository Flux reads."
+  type        = string
+  default     = "https://github.com/jordann6/azure-landing-zone"
+}
+
+variable "gitops_branch" {
+  description = "Branch Flux tracks. A pushed feature branch works for the proof, so it does not wait on a merge."
+  type        = string
+  default     = "main"
+}
+
+variable "slo_alert_runbook_base_url" {
+  description = "Base URL for runbook links in alert annotations."
+  type        = string
+  default     = "https://github.com/jordann6/azure-landing-zone/blob/main/docs/runbooks"
+}

@@ -1,0 +1,97 @@
+name: SRE demo images
+
+# Tests the slo-demo app, then builds the two images the GitOps tree runs and
+# pushes them to ghcr.io (public, GITHUB_TOKEN, no registry secret):
+#
+#   ghcr.io/jordann6/slo-demo      the app (api, loadgen and writer modes)
+#   ghcr.io/jordann6/slo-grafana   Grafana with the Azure Prometheus plugin baked in
+#
+# Both are linux/amd64 (AKS) and linux/arm64 (a local k3d site). The run summary
+# prints each image's digest. Copy the digest into gitops/, then the operator
+# imports it into the private ACR, which is the only registry the cluster can
+# pull from:
+#   az acr import --name <acr> --source ghcr.io/jordann6/slo-demo@sha256:<digest> --image slo-demo:<sha>
+on:
+  push:
+    branches: [main, feat/aks-sre-demo]
+    paths:
+      - "sre-app/**"
+      - ".github/workflows/sre-images.yml"
+  pull_request:
+    paths:
+      - "sre-app/**"
+      - ".github/workflows/sre-images.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+      - name: Unit tests
+        working-directory: sre-app/tests
+        run: dotnet test
+      - name: Build with warnings as errors
+        working-directory: sre-app/src
+        run: dotnet build -c Release -warnaserror
+
+  images:
+    needs: test
+    # Pull requests build without pushing; only branch pushes and dispatches
+    # publish, so a fork's PR can never write to the registry.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: slo-demo
+            context: sre-app
+            file: sre-app/Dockerfile
+          - name: slo-grafana
+            context: sre-app/grafana
+            file: sre-app/grafana/Dockerfile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to ghcr.io
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          provenance: false
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}:${{ github.sha }}
+      - name: Digest
+        if: github.event_name != 'pull_request'
+        env:
+          NAME: ${{ matrix.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          OWNER: ${{ github.repository_owner }}
+          SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "### ${NAME}"
+            echo ""
+            echo "\`ghcr.io/${OWNER}/${NAME}@${DIGEST}\` (tag \`${SHA}\`)"
+            echo ""
+            echo "\`az acr import --name <acr> --source ghcr.io/${OWNER}/${NAME}@${DIGEST} --image ${NAME}:${SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

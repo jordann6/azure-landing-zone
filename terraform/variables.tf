@@ -207,3 +207,14 @@ variable "fortigate_admin_password" {
   sensitive   = true
   description = "Bootstrap admin password for the FortiGate. Required only when enable_fortigate = true."
 }
+
+variable "bastion_sku" {
+  description = "Azure Bastion SKU. Basic (default) is browser-only. Standard enables native-client tunneling (az network bastion ssh/tunnel), used for the Grafana port forward in the SRE demo, at a higher hourly rate."
+  type        = string
+  default     = "Basic"
+
+  validation {
+    condition     = contains(["Basic", "Standard"], var.bastion_sku)
+    error_message = "bastion_sku must be Basic or Standard."
+  }
+}

@@ -33,6 +33,10 @@ def main():
         "microsoft.app/containerapps", "microsoft.containerregistry/registries",
         "microsoft.sql/servers/databases", "microsoft.apimanagement/service",
         "microsoft.network/networkwatchers/flowlogs",
+        # SRE demo layer (workload/, enable_sre_demo and enable_aks_backup).
+        # Ingestion, queries and snapshots bill by usage; none may outlive a session.
+        "microsoft.monitor/accounts", "microsoft.insights/datacollectionendpoints",
+        "microsoft.insights/datacollectionrules", "microsoft.alertsmanagement/prometheusrulegroups",
     }
     survivors = []
     print("== Landing-zone teardown inventory ==")
@@ -70,6 +74,15 @@ def main():
             survivors.append(f"secrets near-expiry alert: {item['name']}")
         elif kind == "microsoft.compute/galleries/images/versions":
             survivors.append(f"billed gallery version: {item['name']}")
+        elif kind == "microsoft.dataprotection/backupvaults" and "aks-demo" in item["name"].lower():
+            # The restore drill's vault has soft delete Off and holds nothing worth
+            # keeping, so it is never a retained item.
+            survivors.append(f"AKS Backup demo vault: {item['name']}")
+        elif kind == "microsoft.storage/storageaccounts" and "aksbkp" in item["name"].lower():
+            survivors.append(f"AKS Backup extension storage: {item['name']}")
+        elif kind == "microsoft.managedidentity/userassignedidentities" and any(
+                n in item["name"].lower() for n in ("-grafana", "-slo-data", "-aks-backup-storage")):
+            survivors.append(f"SRE demo identity: {item['name']}")
         elif kind == "microsoft.dataprotection/backupvaults":
             print(f"  RETAINED backup vault: {item['name']} (check recovery points and retention)")
         elif kind == "microsoft.keyvault/vaults":
@@ -79,6 +92,10 @@ def main():
             survivors.append(f"image-build resource group: {group['name']}")
         if group["name"].lower() == f"rg-{project}-secrets":
             survivors.append(f"secrets resource group: {group['name']}")
+        if group["name"].lower() == f"rg-{project}-prod-aks-snapshots":
+            # Operational-tier snapshots live here and are not soft-delete protected,
+            # so a surviving group can still be holding billed snapshots.
+            survivors.append(f"AKS Backup snapshot resource group: {group['name']}")
     for exemption in exemptions:
         if f"/resourcegroups/{prefix}" in exemption["id"].lower():
             # No build exemption may remain after teardown, even before expiry.

@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slo-demo
+  labels:
+    app: slo-demo
+spec:
+  replicas: 3
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: slo-demo
+  template:
+    metadata:
+      labels:
+        app: slo-demo
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: slo-demo
+      containers:
+        - name: api
+          image: slo-demo
+          env:
+            - name: MODE
+              value: api
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 192Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: fault
+              mountPath: /etc/slo-demo-fault
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # The drill's failure switch. optional: true, so with no ConfigMap the
+        # directory is empty and the app serves normally.
+        - name: fault
+          configMap:
+            name: slo-demo-fault
+            optional: true
+        - name: tmp
+          emptyDir: {}

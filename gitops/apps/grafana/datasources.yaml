@@ -1,0 +1,13 @@
+apiVersion: 1
+datasources:
+  - name: Azure Monitor Prometheus
+    uid: amw
+    type: grafana-azureprometheus-datasource
+    access: proxy
+    url: ${AMW_QUERY_ENDPOINT}
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      azureCredentials:
+        authType: workloadidentity
