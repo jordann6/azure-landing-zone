@@ -1,0 +1,41 @@
+name: Drift detection
+
+# Scheduled refresh-only plan of the ci-proof/ root (an isolated VNet, a subnet
+# and a deny-all NSG in rg-alz-ci, all free) with the read-scoped
+# id-alz-gha-plan identity. Drift opens or updates one `drift` issue; the next
+# clean run closes it.
+#
+# Only ci-proof/ is checked. It stays standing at $0 so the check always has
+# something real to compare against. terraform/ needs the gitignored tfvars and
+# reads a firewalled Key Vault, and workload/ and compute/ are destroyed between
+# sessions, so a scheduled refresh of those roots would mostly report errors,
+# not drift. This is a proof of the drift path on Azure, not drift coverage of
+# the whole landing zone.
+#
+# id-alz-gha-plan trusts ref main, which is what schedule and workflow_dispatch
+# runs on main present, and holds subscription Reader plus blob access to the
+# state container. ci-proof/ variables all have defaults, so no TF_VARS secret.
+#
+# Pinned to one platform-guardrails SHA with the tag in a comment, and the same
+# SHA is passed as guardrails_ref (see guardrails.yml).
+on:
+  schedule:
+    - cron: "41 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci-proof:
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    uses: jordann6/platform-guardrails/.github/workflows/tf-drift.yml@c13311e2cc20b48af292d067e0b936f43116e257 # v1.8.1
+    with:
+      guardrails_ref: c13311e2cc20b48af292d067e0b936f43116e257
+      terraform_dir: ci-proof
+      azure_client_id: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+      azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+      azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
