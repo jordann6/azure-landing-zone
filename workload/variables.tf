@@ -142,7 +142,7 @@ variable "backup_immutability_locked" {
 
 # ── Feature flags ─────────────────────────────────────────────────────────────
 variable "enable_postgres" {
-  description = "PostgreSQL flexible server with its private DNS, Key Vault credential, backup vault, policy and backup instance. Off for the SRE demo session, which keeps its state in the cluster and avoids the vault's 14-day soft-delete floor."
+  description = "PostgreSQL flexible server with its private DNS, Key Vault credential, backup role and backup instance (the vault and policy stay, empty and free). Off for the SRE demo session, which keeps its state in the cluster and avoids the vault's 14-day soft-delete floor."
   type        = bool
   default     = true
 }

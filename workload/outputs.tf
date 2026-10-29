@@ -39,7 +39,7 @@ output "workload_key_vault_id" {
 }
 
 output "backup_vault_id" {
-  value = one(azurerm_data_protection_backup_vault.prod[*].id)
+  value = azurerm_data_protection_backup_vault.prod.id
 }
 
 output "kubelet_identity_object_id" {

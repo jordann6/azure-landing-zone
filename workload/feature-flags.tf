@@ -51,14 +51,6 @@ moved {
   to   = azurerm_monitor_diagnostic_setting.pg[0]
 }
 moved {
-  from = azurerm_data_protection_backup_vault.prod
-  to   = azurerm_data_protection_backup_vault.prod[0]
-}
-moved {
-  from = azurerm_data_protection_backup_policy_postgresql_flexible_server.prod
-  to   = azurerm_data_protection_backup_policy_postgresql_flexible_server.prod[0]
-}
-moved {
   from = azurerm_role_assignment.backup_pg
   to   = azurerm_role_assignment.backup_pg[0]
 }

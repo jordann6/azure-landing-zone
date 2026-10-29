@@ -82,5 +82,6 @@ outputs exist. Never reuse a stale plan.
 DCE, DCR, Prometheus rule groups, the demo backup vault, backup storage, the
 snapshot resource group, demo identities, disks, snapshots and private endpoints.
 The demo vault has soft delete Off, so nothing is held for 14 days. The existing
-Postgres vault is not created with `enable_postgres = false`. `ci-proof/` stays
+Postgres vault (`bv-<project>-prod`, empty) stays as it is: it is outside
+`enable_postgres`, so a session with Postgres off never plans its destroy. `ci-proof/` stays
 standing at $0 by design.

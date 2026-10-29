@@ -1,3 +1,8 @@
+# The vault and its Postgres policy stay outside enable_postgres on purpose: an
+# empty vault costs nothing, and gating it would plan a destroy of the existing
+# vault (soft delete On, with a 14-day floor) whenever Postgres is off. Only the
+# server, its backup role and the backup instance follow the flag.
+#
 # Azure Backup with soft delete and geo-redundant storage, protecting the Postgres
 # server. Soft delete makes a deleted backup recoverable within the retention window
 # (tamper-resistance), and geo-redundancy gives the cross-region copy. Mirrors
@@ -8,8 +13,6 @@
 # ADR-0003). The backup_immutability_locked variable is reserved for that upgrade.
 
 resource "azurerm_data_protection_backup_vault" "prod" {
-  count = local.pg_count
-
   name                = "bv-${var.project}-prod"
   resource_group_name = azurerm_resource_group.prod.name
   location            = azurerm_resource_group.prod.location
@@ -27,10 +30,8 @@ resource "azurerm_data_protection_backup_vault" "prod" {
 }
 
 resource "azurerm_data_protection_backup_policy_postgresql_flexible_server" "prod" {
-  count = local.pg_count
-
   name     = "bkpol-${var.project}-postgres"
-  vault_id = azurerm_data_protection_backup_vault.prod[0].id
+  vault_id = azurerm_data_protection_backup_vault.prod.id
 
   backup_repeating_time_intervals = ["R/2026-01-01T05:00:00+00:00/P1D"]
   time_zone                       = "UTC"
@@ -53,7 +54,7 @@ resource "azurerm_role_assignment" "backup_pg" {
 
   scope                = azurerm_resource_group.prod.id
   role_definition_name = "PostgreSQL Flexible Server Long Term Retention Backup Role"
-  principal_id         = azurerm_data_protection_backup_vault.prod[0].identity[0].principal_id
+  principal_id         = azurerm_data_protection_backup_vault.prod.identity[0].principal_id
 }
 
 # The azurerm backup-instance resource calls an API version the service answers
@@ -69,7 +70,7 @@ resource "azapi_resource" "backup_instance" {
 
   type      = "Microsoft.DataProtection/backupVaults/backupInstances@2025-07-01"
   name      = "${azurerm_postgresql_flexible_server.prod[0].name}-${azurerm_postgresql_flexible_server.prod[0].name}-${random_uuid.backup_instance[0].result}"
-  parent_id = azurerm_data_protection_backup_vault.prod[0].id
+  parent_id = azurerm_data_protection_backup_vault.prod.id
 
   body = {
     properties = {
@@ -85,7 +86,7 @@ resource "azapi_resource" "backup_instance" {
         resourceLocation = azurerm_resource_group.prod.location
       }
       policyInfo = {
-        policyId = azurerm_data_protection_backup_policy_postgresql_flexible_server.prod[0].id
+        policyId = azurerm_data_protection_backup_policy_postgresql_flexible_server.prod.id
       }
     }
   }
