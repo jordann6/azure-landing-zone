@@ -16,8 +16,11 @@ name: Drift detection
 # runs on main present, and holds subscription Reader plus blob access to the
 # state container. ci-proof/ variables all have defaults, so no TF_VARS secret.
 #
-# Pinned to one platform-guardrails SHA with the tag in a comment, and the same
-# SHA is passed as guardrails_ref (see guardrails.yml).
+# Pinned to one platform-guardrails SHA, and the same SHA is passed as
+# guardrails_ref (see guardrails.yml). This pin is newer than the v1.8.1 the other
+# workflows use: v1.8.1 took refresh-only exit code 2 as drift, and on this root
+# Terraform returns 2 with nothing in resource_drift, so every clean run opened a
+# drift issue listing 0 resources. The fix reads resource_drift instead.
 on:
   schedule:
     - cron: "41 13 * * *"
@@ -32,9 +35,9 @@ jobs:
       contents: read
       id-token: write
       issues: write
-    uses: jordann6/platform-guardrails/.github/workflows/tf-drift.yml@c13311e2cc20b48af292d067e0b936f43116e257 # v1.8.1
+    uses: jordann6/platform-guardrails/.github/workflows/tf-drift.yml@8eb9a745e4297682a4e8a5478c363280d6605ff5 # main after v1.9.0 (PR #12, drift from resource_drift)
     with:
-      guardrails_ref: c13311e2cc20b48af292d067e0b936f43116e257
+      guardrails_ref: 8eb9a745e4297682a4e8a5478c363280d6605ff5
       terraform_dir: ci-proof
       azure_client_id: ${{ vars.AZURE_PLAN_CLIENT_ID }}
       azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
