@@ -163,6 +163,10 @@ drill-slo: ## SRE demo: inject failure, SloFastBurn fires and pages, runbook dia
 drill-restore: ## SRE demo, DESTRUCTIVE: delete and restore slo-data from AKS Backup (needs CONFIRM=<cluster>/slo-data)
 	scripts/drill-restore.sh
 
+.PHONY: test-drift
+test-drift: ## Prove drift.yml on ci-proof/: clean run, CLI tag change opens a drift issue, revert closes it
+	scripts/test-drift.sh
+
 .PHONY: destroy-workload
 destroy-workload: ## Tear down the prod workload paved road (AKS, PostgreSQL, ACR, backup) before the base
 	@echo "==> A protected Backup vault can block deletion until retention clears; preserve recovery data and retry afterward."
