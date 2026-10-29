@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016 # wait_until conditions are single-quoted on purpose
 # Stateful restore drill (Phase 3), AKS Backup operational tier. DESTRUCTIVE: it
 # deletes the slo-data namespace and restores it from a snapshot.
 #
@@ -81,7 +82,7 @@ since="$(now)"
 az dataprotection backup-instance adhoc-backup -g "$RG" --vault-name "$VAULT" -n "$BI" \
   --rule-name "$rule" --retention-tag-override Default -o none || { echo "adhoc backup failed" >&2; exit 1; }
 job=""
-wait_until 300 10 test -n "$(latest_job_id Backup "$since")" && job="$(latest_job_id Backup "$since")"
+wait_until 300 10 'test -n "$(latest_job_id Backup "$since")"' && job="$(latest_job_id Backup "$since")"
 # Either a missing job or a failed one stops the drill.
 # shellcheck disable=SC2015
 [ -n "$job" ] && job_wait "$job" || { echo "backup job did not complete" >&2; exit 1; }
@@ -128,7 +129,7 @@ t_restore="$(epoch)"
 az dataprotection backup-instance restore trigger -g "$RG" --vault-name "$VAULT" -n "$BI" --restore-request-object "$req" -o none ||
   { echo "restore trigger failed" >&2; exit 1; }
 rjob=""
-wait_until 300 10 test -n "$(latest_job_id Restore "$since")" && rjob="$(latest_job_id Restore "$since")"
+wait_until 300 10 'test -n "$(latest_job_id Restore "$since")"' && rjob="$(latest_job_id Restore "$since")"
 receipt "$R" restore_job_id "$(basename "${rjob:-none}")"
 receipt "$R" restore_started_at "$since"
 # shellcheck disable=SC2015
@@ -136,7 +137,7 @@ receipt "$R" restore_started_at "$since"
 receipt "$R" restore_job_seconds "$(($(epoch) - t_restore))"
 
 echo "-- 7. Postgres Ready; highest recovered write --"
-wait_until 600 15 kx "kubectl get pod postgres-0 -n ${NS} -o jsonpath='{.status.containerStatuses[0].ready}' | grep -q true" >/dev/null
+wait_until 600 15 'kx "kubectl get pod postgres-0 -n ${NS} -o jsonpath={.status.containerStatuses[0].ready}" 2>/dev/null | grep -q true'
 t_ready="$(epoch)"
 receipt "$R" postgres_ready_at "$(now)"
 # The restored writer Deployment was scaled to 1 at backup time, so it may
@@ -152,9 +153,9 @@ receipt "$R" seconds_failure_to_postgres_ready "$((t_ready - t_fail))"
 echo "-- 8. resume Flux; writer acking; Compliant --"
 flux_suspend false
 trap 'rm -f "$cfg" "$req"' EXIT
-wait_until 600 20 test "$(az k8s-configuration flux show -g "$RG" -c "$AKS" -t managedClusters -n "$FLUX_CONFIG" --query complianceState -o tsv)" = "Compliant"
+wait_until 600 20 'test "$(az k8s-configuration flux show -g "$RG" -c "$AKS" -t managedClusters -n "$FLUX_CONFIG" --query complianceState -o tsv)" = Compliant'
 receipt "$R" flux_resumed_state "$(az k8s-configuration flux show -g "$RG" -c "$AKS" -t managedClusters -n "$FLUX_CONFIG" --query complianceState -o tsv)"
-wait_until 300 15 kx "kubectl logs deploy/slo-writer -n ${NS} --tail=3 | grep -q '\"evt\":\"ack\"'" >/dev/null
+wait_until 300 15 'kx "kubectl logs deploy/slo-writer -n ${NS} --tail=3" 2>/dev/null | grep -q "\"evt\":\"ack\""'
 t_service="$(epoch)"
 receipt "$R" writer_acking_at "$(now)"
 receipt "$R" seconds_failure_to_writes_resumed "$((t_service - t_fail))"

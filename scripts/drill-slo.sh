@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016 # wait_until conditions are single-quoted on purpose
 # SLO drill (Phase 2 acceptance). Injected failure trips the fast-burn page; the
 # runbook's diagnosis runs; recovery resolves the alert. Every timing is a receipt.
 #
@@ -79,7 +80,7 @@ receipt "$R" fault_percent "$FAIL_PERCENT"
 
 echo "-- wait for SloFastBurn to fire (up to ${FIRE_TIMEOUT}s) --"
 fired_line() { alerts_for SloFastBurn | awk '$2 == "Fired"' | head -1; }
-if wait_until "$FIRE_TIMEOUT" 30 test -n "$(fired_line)"; then
+if wait_until "$FIRE_TIMEOUT" 30 'test -n "$(fired_line)"'; then
   read -r alert_id _ alert_start _ <<<"$(fired_line)"
   receipt "$R" fast_burn_alert_id "$alert_id"
   receipt "$R" fast_burn_fired_at "$alert_start"
@@ -103,7 +104,7 @@ remove_fault
 t_recover="$(epoch)"
 receipt "$R" fault_removed_at "$(now)"
 resolved_line() { alerts_for SloFastBurn | awk -v id="${alert_id:-none}" '$1 == id && $2 == "Resolved"' | head -1; }
-if [ -n "${alert_id:-}" ] && wait_until "$RESOLVE_TIMEOUT" 30 test -n "$(resolved_line)"; then
+if [ -n "${alert_id:-}" ] && wait_until "$RESOLVE_TIMEOUT" 30 'test -n "$(resolved_line)"'; then
   read -r _ _ _ resolved_at <<<"$(resolved_line)"
   receipt "$R" fast_burn_resolved_at "$resolved_at"
   receipt "$R" seconds_to_resolve "$(($(epoch) - t_recover))"

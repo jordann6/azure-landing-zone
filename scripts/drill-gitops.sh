@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016 # wait_until conditions are single-quoted on purpose
 # GitOps proofs for the SRE demo (Phase 2 acceptance):
 #   1. the Flux configuration is Compliant
 #   2. drift: a manual `kubectl scale` of slo-demo is reverted by Flux (timed)
@@ -37,7 +38,7 @@ replicas() { kx "kubectl get deploy slo-demo -n slo-demo -o jsonpath='{.spec.rep
 kx "kubectl scale deploy/slo-demo -n slo-demo --replicas=1" >/dev/null
 t0="$(epoch)"
 receipt "$R" drift_injected_at "$(now)"
-if wait_until 300 10 test "$(replicas)" = "3"; then
+if wait_until 300 10 'test "$(replicas)" = "3"'; then
   receipt "$R" drift_reverted_seconds "$(($(epoch) - t0))"
   ok "Flux reverted the manual scale in $(($(epoch) - t0))s"
 else
@@ -53,7 +54,7 @@ if [ "${SKIP_COMMIT:-0}" != "1" ]; then
   live_rps() {
     kx "kubectl get deploy slo-loadgen -n slo-demo -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name==\"RPS\")].value}'" | tail -1
   }
-  if [ -n "$want" ] && wait_until 600 15 test "$(live_rps)" = "$want"; then
+  if [ -n "$want" ] && wait_until 600 15 'test "$(live_rps)" = "$want"'; then
     receipt "$R" commit_converged_seconds "$(($(epoch) - t0))"
     ok "commit ${sha:0:7} live (RPS=$want) after $(($(epoch) - t0))s, no kubectl apply"
   else

@@ -40,12 +40,38 @@ epoch() { date -u +%s; }
 
 # kx "<shell command run with kubectl available>"; prints the logs, returns the
 # command's exit code.
+#
+# Calls the AKS runCommand REST API directly. `az aks command invoke` in Azure
+# CLI 2.83.0 fails every call with "Operation returned an invalid status 'OK'".
+# Entra-enabled clusters need a clusterToken: a token for the AKS Entra server
+# application (6dae42f8-4368-4678-94ff-3960e28e3630).
 kx() {
-  local out code
-  out="$(az aks command invoke -g "$RG" -n "$AKS" --command "$1" -o json 2>/dev/null)" || return 1
-  code="$(jq -r '.exitCode' <<<"$out")"
-  jq -r '.logs' <<<"$out"
-  return "${code:-1}"
+  local id tok ct body loc r st
+  id="/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.ContainerService/managedClusters/${AKS}"
+  tok="$(az account get-access-token --query accessToken -o tsv)" || return 1
+  ct="$(az account get-access-token --resource 6dae42f8-4368-4678-94ff-3960e28e3630 --query accessToken -o tsv)" || return 1
+  body="$(jq -n --arg c "$1" --arg t "$ct" '{command: $c, clusterToken: $t}')"
+  loc="$(curl -s -D - -o /dev/null -X POST -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' \
+    "https://management.azure.com${id}/runCommand?api-version=2024-09-01" -d "$body" |
+    tr -d '\r' | awk 'tolower($1) == "location:" {print $2}')"
+  [ -n "$loc" ] || { echo "runCommand was not accepted" >&2; return 1; }
+  for _ in $(seq 1 90); do
+    r="$(curl -s -H "Authorization: Bearer $tok" "$loc")"
+    st="$(jq -r '.properties.provisioningState // empty' <<<"$r" 2>/dev/null)"
+    case "$st" in
+      Succeeded)
+        jq -r '.properties.logs // ""' <<<"$r"
+        return "$(jq -r '.properties.exitCode // 1' <<<"$r")"
+        ;;
+      Failed)
+        jq -r '.properties.reason // "runCommand failed"' <<<"$r" >&2
+        return 1
+        ;;
+    esac
+    sleep 3
+  done
+  echo "runCommand timed out" >&2
+  return 1
 }
 
 # promq "<PromQL>"; prints the first result value, or "none".
@@ -77,12 +103,15 @@ receipt() {
   echo "  receipt $2 = $3"
 }
 
-# wait_until <timeout-seconds> <interval-seconds> <command...>
+# wait_until <timeout-seconds> <interval-seconds> '<condition>'
+# The condition is a single-quoted string, evaluated fresh on every poll. Passing
+# `test -n "$(f)"` unquoted would expand $(f) once, at the call, and re-test that
+# same value forever: on 2026-10-29 that hid a fired alert and a Flux revert.
 wait_until() {
   local timeout="$1" interval="$2" start
   shift 2
   start="$(epoch)"
-  until "$@"; do
+  until eval "$*"; do
     if [ $(($(epoch) - start)) -ge "$timeout" ]; then return 1; fi
     sleep "$interval"
   done
