@@ -29,7 +29,7 @@ spec:
             - name: MODE
               value: loadgen
             - name: RPS
-              value: "20"
+              value: "25"
             - name: TARGET_URL
               value: http://slo-demo.slo-demo.svc.cluster.local/api/work
           resources:
