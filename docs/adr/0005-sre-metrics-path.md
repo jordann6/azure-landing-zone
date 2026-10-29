@@ -40,7 +40,9 @@ page has to fire even if the cluster is the thing that broke.
   the dashboard's queries through Grafana's API and the workspace directly.
 - The workspace query endpoint and ingestion depend on firewall rules. On
   2026-10-29 ingestion matched the broad AzureCloud network rule; it now matches the
-  documented `AzureMonitor:443` rule, which the next session has to confirm.
+  documented `AzureMonitor:443` rule. The second 2026-10-29 session confirmed it:
+  2,025 connections on that rule, and ingestion, Container Insights and Policy
+  all healthy.
 - Proven 2026-10-29: 50% fault injected at 17:02:36, `SloFastBurn` fired at
   17:08:04 (evaluated 0.077 against 0.072), page email received by 17:10, resolved
   at 17:23:02 after the fault was removed.
