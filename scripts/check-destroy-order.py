@@ -12,8 +12,10 @@ that every cluster-side resource transitively depends on every network-side one.
 """
 import collections
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent / "workload"
@@ -51,11 +53,23 @@ ADMIN_SIDE = [
 ]
 
 
+def tf(cwd, *args):
+    r = subprocess.run(["terraform", f"-chdir={cwd}", *args], capture_output=True, text=True)
+    if r.returncode:
+        sys.exit(f"terraform {' '.join(args)} failed:\n{r.stderr}")
+    return r.stdout
+
+
 def graph():
-    subprocess.run(["terraform", f"-chdir={ROOT}", "init", "-backend=false", "-input=false"],
-                   check=True, capture_output=True)
-    out = subprocess.run(["terraform", f"-chdir={ROOT}", "graph"],
-                         check=True, capture_output=True, text=True).stdout
+    # terraform graph refuses to run after init -backend=false, so graph a copy
+    # of the root with a local backend override. No state is read.
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp) / "workload"
+        shutil.copytree(ROOT, work, ignore=shutil.ignore_patterns(
+            ".terraform", "*.tfvars", "tfplan*", "*.tfstate*"))
+        (work / "zz_backend_override.tf").write_text('terraform {\n  backend "local" {}\n}\n')
+        tf(work, "init", "-input=false")
+        out = tf(work, "graph")
     edges = collections.defaultdict(set)
     for node, dep in re.findall(r'"([^"]+)" -> "([^"]+)"', out):
         edges[node].add(dep)
