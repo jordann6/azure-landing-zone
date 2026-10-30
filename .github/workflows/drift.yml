@@ -35,7 +35,7 @@ jobs:
       contents: read
       id-token: write
       issues: write
-    uses: jordann6/platform-guardrails/.github/workflows/tf-drift.yml@8eb9a745e4297682a4e8a5478c363280d6605ff5 # main after v1.9.0 (PR #12, drift from resource_drift)
+    uses: jordann6/platform-guardrails/.github/workflows/tf-drift.yml@8eb9a745e4297682a4e8a5478c363280d6605ff5 # v1.9.1 (PR #12, drift from resource_drift)
     with:
       guardrails_ref: 8eb9a745e4297682a4e8a5478c363280d6605ff5
       terraform_dir: ci-proof

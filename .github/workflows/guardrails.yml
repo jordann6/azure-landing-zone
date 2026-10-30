@@ -11,17 +11,19 @@ on:
 # cloud token. This repo replaces the old report-only security-gate.yml with the
 # shared toolkit so Azure and AWS run the identical static gates.
 #
-# Version pins: the reusable-workflow pin here (tf-ci) references v1.3.0, the
-# same tag the AWS repo pins. The credentialed apply/destroy/ttl-guard live in
-# their own files, pinned to v1.8.1 by SHA, and sign in through Azure OIDC with
-# the identities bootstrap/ creates.
+# Version pins: tf-ci is pinned to the v1.9.1 SHA, and the same SHA is passed
+# as guardrails_ref so the scripts it fetches match the reviewed workflow. The
+# credentialed apply/destroy/ttl-guard live in their own files, pinned to v1.8.1
+# by SHA (the version their live runs proved), and sign in through Azure OIDC
+# with the identities bootstrap/ creates.
 permissions:
   contents: read
 
 jobs:
   static:
-    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@8eb9a745e4297682a4e8a5478c363280d6605ff5 # v1.9.1
     with:
+      guardrails_ref: 8eb9a745e4297682a4e8a5478c363280d6605ff5
       terraform_dir: terraform
       #
       # skip_policy: this repo carries no Rego yet. The shared conftest gate runs
@@ -33,44 +35,51 @@ jobs:
   # One static job per Terraform root: base (above), the prod workload, the
   # member portal, compute, the state backend, and the CI proof root. Same gates, same pin, same reason for skip_policy.
   static-workload:
-    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@8eb9a745e4297682a4e8a5478c363280d6605ff5 # v1.9.1
     with:
+      guardrails_ref: 8eb9a745e4297682a4e8a5478c363280d6605ff5
       terraform_dir: workload
       skip_policy: true
 
   static-portal:
-    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@8eb9a745e4297682a4e8a5478c363280d6605ff5 # v1.9.1
     with:
+      guardrails_ref: 8eb9a745e4297682a4e8a5478c363280d6605ff5
       terraform_dir: portal
       skip_policy: true
 
   static-compute:
-    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@8eb9a745e4297682a4e8a5478c363280d6605ff5 # v1.9.1
     with:
+      guardrails_ref: 8eb9a745e4297682a4e8a5478c363280d6605ff5
       terraform_dir: compute
       skip_policy: true
 
   static-observability:
-    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@8eb9a745e4297682a4e8a5478c363280d6605ff5 # v1.9.1
     with:
+      guardrails_ref: 8eb9a745e4297682a4e8a5478c363280d6605ff5
       terraform_dir: observability
       skip_policy: true
 
   static-secrets:
-    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@8eb9a745e4297682a4e8a5478c363280d6605ff5 # v1.9.1
     with:
+      guardrails_ref: 8eb9a745e4297682a4e8a5478c363280d6605ff5
       terraform_dir: secrets
       skip_policy: true
 
   static-bootstrap:
-    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@8eb9a745e4297682a4e8a5478c363280d6605ff5 # v1.9.1
     with:
+      guardrails_ref: 8eb9a745e4297682a4e8a5478c363280d6605ff5
       terraform_dir: bootstrap
       skip_policy: true
 
   static-ci-proof:
-    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@v1.3.0
+    uses: jordann6/platform-guardrails/.github/workflows/tf-ci.yml@8eb9a745e4297682a4e8a5478c363280d6605ff5 # v1.9.1
     with:
+      guardrails_ref: 8eb9a745e4297682a4e8a5478c363280d6605ff5
       terraform_dir: ci-proof
       skip_policy: true
 
