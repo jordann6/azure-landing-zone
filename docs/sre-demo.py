@@ -35,7 +35,7 @@ with Diagram(
         ag = Alerts("ag-alz-ops\naction group")
 
     with Cluster("Prod spoke  10.3.0.0/16  (private AKS, UDR egress)"):
-        with Cluster("Private AKS (3 x D2s v3)"):
+        with Cluster("Private AKS (4 x D2s v3)"):
             flux = Flux("Flux extension\ninfra / apps / data")
             app = KubernetesServices("slo-demo api\n+ load generator")
             pg = KubernetesServices("slo-data\nPostgres + writer\n(CMK disk)")
