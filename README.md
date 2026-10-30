@@ -500,7 +500,7 @@ clean. Watch the `Total Regional vCPUs` quota if you also run the VM-Series lab 
 ## CI
 
 Static gates run on every root through the shared [platform-guardrails](https://github.com/jordann6/platform-guardrails)
-toolkit (`.github/workflows/guardrails.yml` → `tf-ci.yml@v1.3.0`): full-history
+toolkit (`.github/workflows/guardrails.yml` → `tf-ci.yml` at v1.9.1, pinned by SHA): full-history
 gitleaks, `fmt` + `validate`, lockfile-committed assertion, tflint, Checkov, and
 Trivy config. Deliberate Checkov/Trivy trade-offs (public Key Vault for CMK
 creation, Standard-tier firewall without IDPS, software-protected key) are
