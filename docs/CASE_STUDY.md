@@ -198,3 +198,86 @@ against real Azure:
   RTO 7.3 s and RPO 0), but only planned failovers were drilled. The prod tier has
   in-region zone-redundant HA and a geo-redundant backup vault, and a policy pins
   Prod to one region.
+
+## SRE layer proven live
+
+A paved road that deploys is not the same as one an on-call engineer can run. Two
+flags on the workload root, both off by default, add the operating layer:
+`enable_sre_demo` puts Flux on the cluster, reconciling `gitops/` from this repo
+(a .NET 10 service with a load generator, Grafana, and a Postgres StatefulSet on
+CMK disks), sends managed Prometheus metrics to an Azure Monitor workspace, and
+evaluates SLO recording and multiwindow burn-rate rules there, paging through the
+base action group. `enable_aks_backup` adds an operational-tier AKS Backup vault
+for the stateful namespace. Images are pinned by digest, and every secret comes
+from Key Vault through the CSI driver with one workload identity per consumer.
+
+![SRE demo layer](sre-demo-architecture.png)
+
+Two design calls carry most of the weight. Rules run in the Azure Monitor
+workspace, not in the cluster, so the page still fires when the cluster is what
+broke ([ADR-0005](adr/0005-sre-metrics-path.md)). Backup uses the operational tier
+in its own vault with soft delete off, because the vault tier rejects disks with
+a disk encryption set and the retained Postgres vault would block teardown for its
+retention window ([ADR-0006](adr/0006-aks-backup-operational-tier.md)).
+
+On 2026-10-29 in eastus2, a drill session ran each scenario against the live
+cluster:
+
+- **GitOps:** a manual `kubectl scale` from 3 to 1 was reverted by Flux in 29
+  seconds, timed from the cluster clock and the kustomize-controller's
+  managedFields entry. A commit raising the load generator from 20 to 25 rps was
+  live in 63 seconds with no kubectl.
+- **SLO:** a 50% fault injected at 17:02:36 fired `SloFastBurn` at 17:08:04
+  (evaluated 0.077 against a 0.072 threshold), and the page email arrived by
+  17:10. With the fault removed, the alert resolved at 17:23:02.
+- **Restore:** the `slo-data` namespace was deleted at 17:43:35 while a writer
+  was inserting rows. The restore job took 219 seconds, Postgres was Ready at 316
+  and writes resumed at 405. The last durable write was 3301 and the restore held
+  3007 with no gaps, so 294 writes were lost. That figure comes from the rows, not
+  the recovery point's timestamp, which was 2.5 minutes later than the newest data
+  it held. Flux resumed Compliant with no diff.
+
+The session also found what the static gates could not. A fresh cluster was
+denied its own KMS key until the control-plane identity got the built-in Reader
+role and a propagation wait. The kubelet had no AcrPull, which the earlier proof
+never exercised because it never pulled an app image. Teardown deleted the hub
+peerings and the Key Vault private endpoint before the cluster, so nodes lost
+egress mid-destroy and the Flux and backup deletes hung for 30 minutes; the
+cluster now depends on its whole network path, and a credential-free
+`terraform graph` check in CI fails on any of 52 missing ordering edges. And the
+firewall's FQDN allowlist was mostly moot: network rules are evaluated first, and
+a broad `AzureCloud` rule was carrying Monitor ingestion, so it is now the
+documented `AzureMonitor:443`.
+
+A second, shorter session that evening proved both fixes. The 98 workload
+resources were destroyed in 23 minutes in dependency order with no manual step:
+the Flux configuration in 1m03s and the backup instance in 1m54s, then the
+cluster in 6m46s, and only then the peerings and private endpoints. The narrowed
+rule carried 2,025 connections while Flux, Container Insights, managed
+Prometheus, Azure Policy and an on-demand backup (4m06s) all worked. That session
+found two more. Three nodes still left the backup agent short of CPU (it requests
+520m and the largest free slice was about 440m), so the default is now four. And
+the backup instance checks its storage permissions once at creation and never
+retries, so it now waits five minutes after its role assignments, the same
+pattern the cluster already used. `verify-teardown.sh` passed after both
+sessions.
+
+The full list of findings is in the README ("What the live runs found", items 9
+to 23), with the SLO spec in [slo.md](slo.md), the runbooks in
+[runbooks/](runbooks/) and the priced session plan in
+[sre-session.md](sre-session.md). Session costs are estimates, about $7 to $9.50
+for the drill session and $6 to $7.50 for the proof session, until Cost
+Management posts.
+
+### Not proven
+
+- **Cross-region restore.** The operational tier restores in the same region
+  only, and the result is crash-consistent, not application-consistent. Postgres
+  replays its WAL on start.
+- **Paging beyond email.** Sev 1 and Sev 3 both deliver by email; an on-call
+  rotation or paging service would be an action group change.
+- **The Grafana UI.** Grafana has no public endpoint and viewing it needs Bastion
+  Standard. The drills check its data source and run the dashboard's queries
+  through its API instead.
+- **Logs.** There is no log aggregation stack in the cluster; Container Insights
+  is the log path.
