@@ -261,6 +261,20 @@ resource "azurerm_role_assignment" "aks_backup" {
   principal_type       = "ServicePrincipal"
 }
 
+# The backup instance checks the extension identity's access to the storage
+# account once, when it is created, and stays in ProtectionError if that check
+# fails; it does not retry. On 2026-10-29 the instance was created 31 seconds
+# after Storage Account Contributor and failed listKeys with a 403, although
+# the role was in place. Velero's storage location went Available about four
+# minutes later, and only a recreated instance recovered. Same pattern as
+# time_sleep.aks_rbac_propagation in aks.tf.
+resource "time_sleep" "aks_backup_rbac_propagation" {
+  count           = local.backup_count
+  create_duration = "5m"
+
+  depends_on = [azurerm_role_assignment.aks_backup]
+}
+
 # ── Policy and backup instance ───────────────────────────────────────────────
 
 # Every 4 hours (the service minimum) on the operational store, kept 1 day. The
@@ -303,6 +317,7 @@ resource "azurerm_data_protection_backup_instance_kubernetes_cluster" "aks_demo"
 
   depends_on = [
     azurerm_role_assignment.aks_backup,
+    time_sleep.aks_backup_rbac_propagation,
     azurerm_kubernetes_cluster_trusted_access_role_binding.aks_backup,
     azurerm_kubernetes_cluster_extension.aks_backup,
     # Keeps the operator's kubectl access until the instance is deleted.

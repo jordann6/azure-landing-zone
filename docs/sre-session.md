@@ -13,7 +13,7 @@ in eastus2.
 |---|---|---|
 | Azure Firewall Standard | $1.25/hr deployment + $0.07/hr per capacity unit | whole session |
 | Bastion Standard | $0.29/hr (Basic $0.19/hr) | only for the Grafana UI |
-| AKS nodes, 3 x D2s v3 | $0.096/hr each | whole session |
+| AKS nodes, 4 x D2s v3 | $0.096/hr each | whole session |
 | Management VM, B2s | $0.0499/hr | only for the Grafana UI |
 | Private endpoints (ACR, Key Vault, AKS KMS, backup blob) | $0.01/hr each | whole session |
 | Standard internal load balancer (Grafana) | $0.025/hr | whole session |
@@ -31,12 +31,13 @@ By usage:
 | Premium SSD P1, 4 GiB | $0.60/month | negligible |
 
 **Estimate:** firewall $1.32 to $1.39/hr (1 or 2 capacity units) + Bastion Basic
-$0.19 + nodes $0.288 + four private endpoints $0.04 + load balancer $0.025 = about
-**$1.87 to $1.94/hr** standing. The Grafana UI path adds $0.15/hr (Bastion
-Standard delta $0.10, VM $0.05). A 2-hour window is $3.75 to $3.90 hourly, plus
+$0.19 + nodes $0.384 + four private endpoints $0.04 + load balancer $0.025 = about
+**$1.96 to $2.03/hr** standing. The Grafana UI path adds $0.15/hr (Bastion
+Standard delta $0.10, VM $0.05). A 2-hour window is $3.90 to $4.10 hourly, plus
 ACR's day ($1.67), the backup instance's day (about $0.40) and Log Analytics
 (about $1): **about $7 to $8**, inside the $12 cap with room for one retry.
-Three nodes, not two: two D2s v3 were CPU-starved by the add-ons on 2026-10-29
+Four nodes: two D2s v3 were CPU-starved by the add-ons on 2026-10-29, and three
+left no room for the AKS Backup agent in the proof session the same evening
 (see `aks_node_count` in workload/variables.tf).
 The cap is an operator stop condition, not an enforced cutoff; the $20 budget
 alert only notifies.
@@ -78,8 +79,9 @@ outputs exist. Never reuse a stale plan.
    On 2026-10-29 the workload destroy removed the hub peerings and the Key Vault
    private endpoint before the cluster, and the Flux configuration and backup
    instance deletes hung for 30 minutes. The cluster now depends on its whole
-   network path (`make check-destroy-order` proves the graph). Fixed in code; the
-   next session's teardown is the live proof. If a delete still hangs, check node
+   network path (`make check-destroy-order` proves the graph). Proven in the
+   second session that evening: the workload's 98 resources went in 23 minutes in
+   the designed order with no manual step. If a delete still hangs, check node
    readiness and the peerings first.
 8. **After:** narrow the AKS Backup egress list from the session's
    `AZFWApplicationRule` logs, fix anything else the run found, then merge.

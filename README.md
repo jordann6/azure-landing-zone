@@ -97,7 +97,8 @@ real deploy, image bake or teardown in Azure.
    means a deleted and recreated repo with the same name cannot inherit the trust.
 
 The drift proof and the [SRE demo session](#sre-demo-gitops-slos-and-a-restore-drill)
-on 2026-10-29 added these.
+on 2026-10-29 added these, and a second, shorter session that evening proved the
+fixes for 20 and 21 and found 22 and 23.
 
 9. **The shared drift check cried wolf.** `terraform plan -refresh-only
    -detailed-exitcode` returned 2 on azurerm with an empty `resource_drift`, so
@@ -112,7 +113,8 @@ on 2026-10-29 added these.
     AcrPull. The 2026-10-06 proof never pulled an app image, so it never showed.
 12. **Two nodes were not enough.** The add-ons alone requested about 1.95 of the
     1.9 allocatable vCPU per D2s v3 node, and the AKS Backup extension's Helm
-    install timed out. The default is now 3 nodes.
+    install timed out. Three were not enough either (finding 22); the default is
+    now 4.
 13. **Docker Hub and ECR Public both rate-limited ACR import (429)** through the
     shared egress. Postgres is mirrored to ghcr.io by digest and imported from there.
 14. **The backup extension needs a role the docs leave out.** The instance sat in
@@ -136,15 +138,31 @@ on 2026-10-29 added these.
     nothing ordered them. Nodes lost egress and went NotReady, and the Flux
     configuration and backup instance deletes hung 30 minutes and failed. The
     cluster now depends on its whole network path, and `make check-destroy-order`
-    (also a CI job) fails on a missing edge. Fixed in code; the next live teardown
-    is the proof.
+    (also a CI job) fails on a missing edge. Proven in a second session the same
+    evening: the Flux configuration deleted in 1m03s and the backup instance in
+    1m54s, the cluster went next (6m46s), and only then the peerings and private
+    endpoints. 98 resources in 23 minutes, no manual step.
 21. **The FQDN allowlist was mostly moot.** Network rules are evaluated before
     application rules, and an `AzureCloud.<region>:443` network rule carried 2874
     connections, Monitor ingestion among them. The backup extension's FQDN rule
     had zero hits. A private cluster needs none of those ports, so the rule is now
-    the documented `AzureMonitor:443`, and the backup wildcards are gone. Built,
-    not yet proven live. The firewall did deny what it should: grafana.com,
-    usage.projectcalico.org and cdn.fwupd.org.
+    the documented `AzureMonitor:443`, and the backup wildcards are gone. Proven in
+    the second session: that rule carried 2,025 connections, the FQDN rules now
+    match by name, and Flux, Container Insights, managed Prometheus, Azure Policy
+    and an on-demand AKS Backup (4m06s) all worked. The firewall denied what it
+    should: grafana.com, usage.projectcalico.org, cdn.fwupd.org, and the
+    `md-*.blob.storage.azure.net` endpoints Microsoft documents as safe to block.
+22. **Three nodes were not enough either.** The add-ons and the Flux apps fit, but
+    the AKS Backup agent's Velero container requests 520m and the largest free
+    slice was about 440m ("0/3 nodes are available: 3 Insufficient cpu"). The
+    extension's Helm install timed out before a fourth node joined. The default is
+    now 4.
+23. **A backup instance checks its permissions once.** Created 31 seconds after
+    the extension identity's Storage Account Contributor role, the instance failed
+    `listKeys` with a 403 and stayed in `ProtectionError`, although the role was
+    in place and Velero's storage location went Available minutes later. Only a
+    recreated instance recovered. A 5-minute `time_sleep` now sits between the
+    backup role assignments and the instance, the same pattern as the cluster's.
 
 ## How Azure differs from the AWS and GCP zones
 
@@ -327,8 +345,9 @@ page through the base action group. `enable_aks_backup` adds an operational-tier
 AKS Backup vault for the stateful namespace. Images are pinned by digest; secrets
 come from Key Vault through the CSI driver, one workload identity per consumer.
 
-Session of 2026-10-29, eastus2, about 3.5 hours of hourly resources, estimated
-$7 to $9.50 (Cost Management had not posted when this was written):
+Sessions of 2026-10-29, eastus2: the drill session (about 3.5 hours of hourly
+resources, estimated $7 to $9.50) and a proof session that evening (about 2.3
+hours, estimated $6 to $7.50). Cost Management had not posted when this was written.
 
 | Drill | Result |
 |---|---|
@@ -336,9 +355,10 @@ $7 to $9.50 (Cost Management had not posted when this was written):
 | SLO (`make drill-slo`) | 50% fault injected at 17:02:36. `SloFastBurn` fired at 17:08:04 (5m28s; evaluated 0.077 against 0.072) and the page email arrived by 17:10. Fault removed at 17:11:45, alert resolved at 17:23:02. |
 | Restore (`make drill-restore`) | Namespace deleted at 17:43:35. Restore job 219s, Postgres Ready at +316s, writes resumed at +405s. Last durable write 3301, recovered 3007 with no gaps: 294 writes lost. Flux resumed Compliant with no diff. |
 | Add-ons | Container Insights wrote 2153 KubePodInventory rows in 15 minutes; Azure Policy reported 9 states. |
+| Proof session (same evening, 4 nodes) | Narrowed egress: `AzureMonitor:443` carried 2,025 connections; Flux Compliant, 2,364 KubePodInventory rows in 15 minutes, 21 Prometheus targets up, an on-demand AKS Backup completed in 4m06s. Teardown: 98 workload resources in 23 minutes in dependency order, verify-teardown PASS. |
 
 What the session found is in [What the live runs found](#what-the-live-runs-found),
-items 10 to 21. The SLO spec is [docs/slo.md](docs/slo.md), the runbooks are in
+items 10 to 23. The SLO spec is [docs/slo.md](docs/slo.md), the runbooks are in
 [docs/runbooks/](docs/runbooks/), the priced session plan with stop conditions is
 [docs/sre-session.md](docs/sre-session.md), and the two design calls are
 [ADR-0005](docs/adr/0005-sre-metrics-path.md) (metrics path) and

@@ -12,5 +12,5 @@ deployer_ip_cidrs = ["203.0.113.4/32"] # <-- replace with your IPv4/32
 
 # Cost knobs (defaults are demo-minimum).
 # aks_node_vm_size = "Standard_D2s_v3"
-# aks_node_count   = 3
+# aks_node_count   = 4
 # pg_sku           = "GP_Standard_D2s_v3"

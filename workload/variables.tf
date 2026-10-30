@@ -95,13 +95,16 @@ variable "aks_node_vm_size" {
   default     = "Standard_D2s_v3"
 }
 
-# Three, not two. On 2026-10-29 two D2s_v3 nodes were CPU-starved: the add-ons
-# alone requested about 1.95 of the 1.9 allocatable vCPU per node, and the AKS
-# Backup extension's Helm install timed out until a third node joined.
+# Four D2s_v3. On 2026-10-29 two nodes were CPU-starved by the add-ons alone
+# (about 1.95 of 1.9 allocatable vCPU requested per node). The proof session the
+# same evening ran three: the add-ons and the Flux apps fit, but the AKS Backup
+# agent (Velero, 520m requested) found at most 440m free on any node ("0/3 nodes
+# are available: 3 Insufficient cpu") and the extension's Helm install timed out
+# until a fourth node joined.
 variable "aks_node_count" {
   description = "Node pool node count."
   type        = number
-  default     = 3
+  default     = 4
 }
 
 # ── Data tier ─────────────────────────────────────────────────────────────────
